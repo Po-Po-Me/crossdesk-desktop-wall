@@ -201,13 +201,12 @@ void Data(const char* data, size_t size, const char*, size_t,
       return;
     }
     const auto payload = std::string(data, size);
-    const auto preview = json::parse(payload, nullptr, false);
+    auto preview = json::parse(payload, nullptr, false);
     if (preview.is_object() &&
-        preview.value("type", std::string()) == "deskhub_preview_status") {
+        preview["type"].is_string() &&
+        preview["type"].get<std::string>() == "deskhub_preview_status") {
       // Preview subscriptions are addressed by request id and answered on the
-      // same control stream; hand the verdict to the previewer unchanged.
-      preview["type"] = 17;
-      // Wrap it so Java sees the same event shape as every other control frame.
+      // same control stream; wrap the verdict so Java reads one event shape.
       ctx->owner->Event(4, json{{"type", 17}, {"deskhub_preview_status", preview}});
       return;
     }

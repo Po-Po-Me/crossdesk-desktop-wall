@@ -6,7 +6,7 @@ name: Build wall APK
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, wall]
     paths-ignore:
       - '**.md'
   workflow_dispatch:
@@ -203,7 +203,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v6
         with:
-          name: crossdesk-wall-arm64-${{ env.ARTIFACT_VERSION }}
+          name: crossdesk-wall-arm64-${{ env.ARTIFACT_VERSION }}-${{ github.run_number }}
           path: ${{ steps.sign.outputs.apk }}
           if-no-files-found: error
 
