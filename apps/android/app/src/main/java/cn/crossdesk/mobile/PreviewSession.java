@@ -28,7 +28,7 @@ final class PreviewSession implements NativeSession.Listener {
     private final int port;
     private final String id;
     private final String password;
-    private final int display;
+    private volatile int display;
     private final Tile tile;
     private NativeSession session;
     private MirrorTexture mirror;

@@ -24,7 +24,9 @@ final class MirrorTexture {
     /** A TextureView is the sole consumer of this texture. */
     boolean bind(TextureView target) {
         if (target.getSurfaceTexture() == texture) return true;
-        return target.setSurfaceTexture(texture);
+        target.setSurfaceTexture(texture);
+        // The texture is attached synchronously; the view owns no other buffer now.
+        return target.getSurfaceTexture() == texture;
     }
 
     void release() {

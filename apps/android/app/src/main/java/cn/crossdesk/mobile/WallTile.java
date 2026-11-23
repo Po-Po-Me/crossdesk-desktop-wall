@@ -53,7 +53,7 @@ final class WallTile extends FrameLayout {
         placeholder.setGravity(Gravity.CENTER);
         picture.addView(placeholder, new LayoutParams(-1, -1));
         // Height is resolved here because the picture window has no intrinsic size.
-        setOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+        addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
             int caption = 0;
             if (getChildCount() > 1) caption = getChildAt(1).getHeight();
             int height = Math.max(0, getHeight() - caption);
