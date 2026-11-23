@@ -39,6 +39,13 @@ final class NativeSession implements AutoCloseable {
         default void announcement(JSONObject message) { }
         default void announcementFailed(String requestId) { }
         default void passwordRejected() { ended(L10n.tr("远端密码错误")); }
+        // Wall previews: the decode surface is ready, a frame arrived, the host answered a
+        // stream request, or it advertised its preview capability. Defaults keep existing
+        // listeners unchanged.
+        default void previewSurface() { }
+        default void previewFrame() { }
+        default void previewStream(boolean accepted, long requestId) { }
+        default void previewStatus(boolean supported, boolean accepted) { }
     }
     // Serializes all peer creation/API calls/destruction, including across activities.
     private static final ExecutorService RTC = Executors.newSingleThreadExecutor(r -> new Thread(r, "CrossDesk RTC"));
@@ -68,6 +75,13 @@ final class NativeSession implements AutoCloseable {
         execute(()->{boolean sending=connected&&handle!=0&&nPumpFiles(handle);if(!closed)main.postDelayed(this,sending?10:1000);});
     }};
     private final RemoteNetworkStatistics networkStatistics=new RemoteNetworkStatistics();
+    // Wall preview state. The mirror exists only while a wall tile consumes this session;
+    // interactive sessions never allocate it.
+    private volatile MirrorTexture mirrorTexture;
+    private volatile boolean mirrorActive;
+    private final java.util.concurrent.atomic.AtomicBoolean mirrorEnabled=new java.util.concurrent.atomic.AtomicBoolean();
+    private volatile long previewRequest;
+    private volatile boolean previewAccepted, previewSupported, previewPending, previewOnlySession;
     private final Runnable statisticsTick=new Runnable(){public void run(){
         if(closed)return;
         privacyScreen.tick(android.os.SystemClock.elapsedRealtime());
@@ -104,6 +118,7 @@ final class NativeSession implements AutoCloseable {
                 nFileDirectory(handle,new File(documents.directory,"received").getAbsolutePath());
                 if (direct) join("");
                 if (surface != null && surface.isValid()) nSurface(handle, surface);
+                else if (mirrorTexture != null) nSurface(handle, mirrorTexture.surface);
             } catch (Exception error) { fail(L10n.tr("安全存储或证书初始化失败，请重试或清除应用数据")); }
         });
     }
@@ -214,8 +229,8 @@ final class NativeSession implements AutoCloseable {
                         if (connected) return; // Repeated transport readiness is the same desktop session.
                         connected = true; main.removeCallbacks(timeout);
                         nReady(handle,resolutionStore.load(host,port,remote).toString().getBytes(StandardCharsets.UTF_8));
-                        audio = new AudioPlayer();
-                        nControl(handle, 2, 1);
+                        if(!previewOnlySession)audio = new AudioPlayer();
+                        nControl(handle, 2, previewOnlySession?0:1);
                         ui(() -> { listener.connected(); if(!closed){statisticsTick.run();fileTick.run();} });
                     } else if (status == 0 || status == 2) ui(() -> listener.status(L10n.tr("正在建立安全连接…")));
                     else if (status == 6) ui(() -> { listener.passwordRejected(); close(); });
@@ -231,7 +246,11 @@ final class NativeSession implements AutoCloseable {
                         return;
                     }
                     JSONObject info=event.optJSONObject("host_info");
-                    if(info!=null)supportsTextInput=info.optBoolean("supports_text_input",false);
+                    if(info!=null){
+                        supportsTextInput=info.optBoolean("supports_text_input",false);
+                        boolean supported=info.optBoolean("supports_deskhub_preview",false);
+                        if(supported!=previewSupported){previewSupported=supported;ui(()->listener.previewStatus(supported,previewAccepted));}
+                    }
                     ui(() -> {
                         if(event.optInt("type",-1)==10){
                             privacyScreen.receive(event,android.os.SystemClock.elapsedRealtime());
@@ -240,6 +259,10 @@ final class NativeSession implements AutoCloseable {
                             JSONObject service=event.optJSONObject("service_status");
                             privacyScreen.setInteractiveStage(service==null?"":service.optString("interactive_stage",""));
                             listener.privacyChanged();
+                        } else if(event.optInt("type",-1)==17){
+                            JSONObject status=event.optJSONObject("deskhub_preview_status");
+                            if(status!=null)previewAccepted(status.optBoolean("accepted",false),status.optLong("request_id",-1));
+                            return;
                         }
                         listener.data(event);
                     });
@@ -247,6 +270,10 @@ final class NativeSession implements AutoCloseable {
                 else if (type == 5) {
                     int width = event.getInt("width"), height = event.getInt("height");
                     ui(() -> listener.videoSize(width, height));
+                } else if (type == 11) {
+                    // A fresh stream rendered into the attached surface: the wall re-arms its
+                    // frame budget after display switches, encoder changes or fallback.
+                    listener.previewSurface();
                 } else if (type == 7) networkStatistics.receive(new RemoteNetworkStatistics.Report(event),RemoteNetworkStatistics.now());
                 else if (type == 8 && signalReady) ui(() -> listener.announcement(event));
                 else if (type == 9 && signalReady && presenceRequested) {
@@ -268,6 +295,7 @@ final class NativeSession implements AutoCloseable {
         if (!closed && player != null) player.offer(pcm);
     }
     @SuppressWarnings("unused") private void onNativeVideoFrame(long id,double latency,int width,int height){
+        if(!closed&&mirrorEnabled.get()&&mirrorTexture!=null&&previewAccepted)listener.previewFrame();
         if(!closed)networkStatistics.frame(id,latency,width,height,RemoteNetworkStatistics.now());
     }
     void videoSettings(RemoteVideoSettings.Values settings,long requestId){
@@ -369,6 +397,53 @@ final class NativeSession implements AutoCloseable {
         if(closed)return;
         documents.save(file,destination,success->ui(()->listener.controlFeedback(success?L10n.tr("文件已保存"):L10n.tr("文件保存失败，请重试"))));
     }
+    /** Preview peers exist only to feed a wall tile: no audio playback, no controls. */
+    void previewOnly(){previewOnlySession=true;}
+    /** Give a fresh mirror to a preview peer before it starts; interactive sessions skip this. */
+    void useMirror(MirrorTexture target){mirrorTexture=target;}
+    /** Wall tile claims the mirror; the native side renders decoded frames into it. */
+    void attachMirror(){
+        MirrorTexture target=mirrorTexture;
+        if(closed||target==null)return;
+        execute(()->{if(!closed&&handle!=0&&surface==null)nSurface(handle,target.surface);});
+        main.post(()->listener.previewSurface());
+    }
+    void detachMirror(){
+        mirrorEnabled.set(false);
+        execute(()->{if(!closed&&handle!=0&&surface==null)nSurface(handle,null);});
+    }
+    /** Frames are only requested while the tile is visible on screen. */
+    void setMirrorActive(boolean active){mirrorEnabled.set(active&&mirrorTexture!=null);}
+    boolean mirrorActive(){return mirrorEnabled.get()&&mirrorTexture!=null;}
+    /**
+     * The wall stops drawing this peer; the shared surface is released and the host is asked
+     * for an interactive cadence before control takes over.
+     */
+    void leaveWall(){
+        mirrorEnabled.set(false);previewOnlySession=false;
+        if(mirrorTexture==null)return;
+        mirrorTexture=null;
+        execute(()->{if(!closed&&handle!=0)nSurface(handle,null);});
+        previewPending=false;
+        previewStream(60,0,0,1,30,1);
+    }
+    /** Reduced cadence subscription; fps 0 pauses, 1/8/15 are preview tiers. */
+    void previewStream(int fps,int width,int height,int quality,int frameRate,int preference){
+        if(closed||!connected)return;
+        previewRequest++;
+        previewPending=true;
+        final long requestId=previewRequest;
+        execute(()->{if(!connected||closed)return;
+            if(!nPreview(handle,fps,width,height,quality,frameRate,preference,requestId))
+                ui(()->{if(requestId==previewRequest){previewPending=false;listener.previewStream(false,requestId);}});
+        });
+    }
+    private void previewAccepted(boolean value,long requestId){
+        if(requestId!=previewRequest)return;
+        previewPending=false;previewAccepted=value;
+        listener.previewStream(value,requestId);
+    }
+    boolean previewSupported(){return previewSupported;}
     @Override public void close() {
         if (closed) return;
         closed = true; main.removeCallbacks(timeout);main.removeCallbacks(statisticsTick);main.removeCallbacks(fileTick);
@@ -377,6 +452,7 @@ final class NativeSession implements AutoCloseable {
             if (audio != null) { audio.close(); audio = null; }
             password = "";
             if (handle != 0) { nDestroy(handle); handle = 0; }
+            mirrorTexture=null;mirrorEnabled.set(false);
             documents.close();
             surface = null;
         });
@@ -405,5 +481,6 @@ final class NativeSession implements AutoCloseable {
     private static native boolean nSendFile(long handle,String path,byte[] name);
     private static native boolean nPumpFiles(long handle);
     private static native void nSurface(long handle, Surface surface);
+    private static native boolean nPreview(long handle,int fps,int width,int height,int quality,int frameRate,int preference,long requestId);
     private static native void nDestroy(long handle);
 }

@@ -388,4 +388,17 @@
     <string name="text_53b856ab7ac9d8e2" formatted="false">"Error de conexión IP directa. Comprueba la dirección, el puerto y la red del equipo."</string>
     <string name="text_3a940622a8012b31" formatted="false">"Dirección local"</string>
     <string name="text_2c5e32d2c5de5c2b" formatted="false">"Dirección remota"</string>
+    <string name="text_13d61fea9f174905" formatted="false">"Vista previa"</string>
+    <string name="text_8de76a8cc2a50699" formatted="false">"Toca para controlar"</string>
+    <string name="text_8d12fc0d4eb26021" formatted="false">"Pausar"</string>
+    <string name="text_7c9691192f1b7340" formatted="false">"Reanudar"</string>
+    <string name="text_8c4aeb99f859e601" formatted="false">"Aún no hay escritorios"</string>
+    <string name="text_115e712618ba1add" formatted="false">"Conecta un escritorio una vez y guarda su contraseña; aquí aparecerá su imagen en vivo."</string>
+    <string name="text_45cb18137e3564c4" formatted="false">"Vista previa del escritorio, toca para controlar"</string>
+    <string name="text_c0f435c7a0088208" formatted="false">"En vista previa"</string>
+    <string name="text_93b1e156152cfca4" formatted="false">"Iniciando conexión de vista previa…"</string>
+    <string name="text_ef31aa404424e6b0" formatted="false">"Obteniendo la imagen"</string>
+    <string name="text_90e28b54e030bd66" formatted="false">"Reconectando…"</string>
+    <string name="text_899e00ee93fae007" formatted="false">"Vista previa no disponible"</string>
+    <string name="text_65b5f2031f9225bd" formatted="false">"Cambiando de pantalla"</string>
 </resources>

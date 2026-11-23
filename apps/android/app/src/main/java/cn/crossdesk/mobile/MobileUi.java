@@ -3,6 +3,7 @@ package cn.crossdesk.mobile;
 import android.content.Context;
 import android.graphics.*;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.view.*;
 import android.widget.*;
@@ -61,6 +62,14 @@ final class MobileUi {
         box.setContentDescription(label);box.setClickable(true);box.setFocusable(true);box.setOnClickListener(v->click.run());return box;
     }
     Icon icon(String name,int color) { return new Icon(context,name,color); }
+    /** Translucent press overlay so whole-card tap targets still look tappable on a dark wall. */
+    Drawable selectable(int alpha) {
+        ColorDrawable base = new ColorDrawable(Color.TRANSPARENT);
+        android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
+        states.addState(new int[]{android.R.attr.state_pressed}, new ColorDrawable(alpha));
+        states.addState(new int[0], base);
+        return states;
+    }
     void gap(LinearLayout parent,int height){parent.addView(new View(context),new LinearLayout.LayoutParams(1,dp(height)));}
     void divider(LinearLayout parent){View line=new View(context);line.setBackgroundColor(LINE);parent.addView(line,new LinearLayout.LayoutParams(-1,dp(.5f)));}
     LinearLayout.LayoutParams size(int width,int height){return new LinearLayout.LayoutParams(width<0?width:dp(width),height<0?height:dp(height));}

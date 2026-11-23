@@ -394,6 +394,19 @@ final class LocalizationKeys {
         IDS.put("IP 直连失败，请检查电脑的直连地址和网络。", R.string.text_53b856ab7ac9d8e2);
         IDS.put("本端地址", R.string.text_3a940622a8012b31);
         IDS.put("对端地址", R.string.text_2c5e32d2c5de5c2b);
+        IDS.put("预览", R.string.text_13d61fea9f174905);
+        IDS.put("轻触开始控制", R.string.text_8de76a8cc2a50699);
+        IDS.put("暂停", R.string.text_8d12fc0d4eb26021);
+        IDS.put("继续", R.string.text_7c9691192f1b7340);
+        IDS.put("还没有可预览的桌面", R.string.text_8c4aeb99f859e601);
+        IDS.put("连接一次电脑并保存密码后，这里会显示它的实时画面。", R.string.text_115e712618ba1add);
+        IDS.put("预览这个桌面，轻触开始控制", R.string.text_45cb18137e3564c4);
+        IDS.put("预览中", R.string.text_c0f435c7a0088208);
+        IDS.put("正在建立预览连接…", R.string.text_93b1e156152cfca4);
+        IDS.put("正在获取画面", R.string.text_ef31aa404424e6b0);
+        IDS.put("正在重新连接…", R.string.text_90e28b54e030bd66);
+        IDS.put("预览暂不可用", R.string.text_899e00ee93fae007);
+        IDS.put("正在切换显示器", R.string.text_65b5f2031f9225bd);
     }
     private LocalizationKeys() {}
 }

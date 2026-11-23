@@ -200,8 +200,19 @@ void Data(const char* data, size_t size, const char*, size_t,
       ctx->owner->Send(kControlStream, *proof);
       return;
     }
+    const auto payload = std::string(data, size);
+    const auto preview = json::parse(payload, nullptr, false);
+    if (preview.is_object() &&
+        preview.value("type", std::string()) == "deskhub_preview_status") {
+      // Preview subscriptions are addressed by request id and answered on the
+      // same control stream; hand the verdict to the previewer unchanged.
+      preview["type"] = 17;
+      // Wrap it so Java sees the same event shape as every other control frame.
+      ctx->owner->Event(4, json{{"type", 17}, {"deskhub_preview_status", preview}});
+      return;
+    }
     RemoteAction action{};
-    if (action.from_json(std::string(data, size))) {
+    if (action.from_json(payload)) {
       const auto message = action.to_json();
       ctx->owner->Event(4, message.data(), message.size());
       FreeRemoteAction(action);
@@ -258,6 +269,9 @@ void RenderVideo(Session* s, VideoPicture picture) {
   if (size_changed) {
     s->width = w; s->height = h;
     s->Event(5, {{"width", w}, {"height", h}});
+    // Wall previews re-subscribe after every surface attach, encoder switch or
+    // display change, so a fresh keyframe must be announced once per stream.
+    s->Event(11, {{"width", w}, {"height", h}});
   }
   // Measure through display submission, using MiniRTC's calibrated capture clock.
   const auto now = MiniRtcGetSystemTimeMicros(s->controller);
@@ -471,6 +485,20 @@ extern "C" JNIEXPORT jboolean JNICALL JNI_METHOD(nVideoSettings)(
   const auto data = android_controller::VideoSettingsMessage(quality, rate, preference, static_cast<uint32_t>(request_id));
   if (data.empty()) return false;
   return MiniRtcSendReliableDataFrame(s->controller, data.data(), data.size(), kControlStream) == 0;
+}
+extern "C" JNIEXPORT jboolean JNICALL JNI_METHOD(nPreview)(
+    JNIEnv*, jclass, jlong handle, jint fps, jint width, jint height,
+    jint quality, jint frame_rate, jint preference, jlong request_id) {
+  auto* s = From(handle);
+  if (!s || !s->controller || s->stopping || request_id <= 0 ||
+      request_id > UINT32_MAX)
+    return false;
+  const auto data = android_controller::PreviewSubscriptionMessage(
+      fps, width, height, quality, frame_rate, preference,
+      static_cast<uint32_t>(request_id));
+  if (data.empty()) return false;
+  return MiniRtcSendReliableDataFrame(s->controller, data.data(), data.size(),
+                                      kControlStream) == 0;
 }
 extern "C" JNIEXPORT jboolean JNICALL JNI_METHOD(nDisplayResolution)(
     JNIEnv* env, jclass, jlong handle, jint display_id, jstring display_key,

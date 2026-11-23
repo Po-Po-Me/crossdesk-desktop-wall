@@ -388,4 +388,17 @@
     <string name="text_53b856ab7ac9d8e2" formatted="false">"IP 直連失敗，請檢查電腦的直連位址、連接埠和網路。"</string>
     <string name="text_3a940622a8012b31" formatted="false">"本端位址"</string>
     <string name="text_2c5e32d2c5de5c2b" formatted="false">"對端位址"</string>
+    <string name="text_13d61fea9f174905" formatted="false">"預覽"</string>
+    <string name="text_8de76a8cc2a50699" formatted="false">"輕觸開始控制"</string>
+    <string name="text_8d12fc0d4eb26021" formatted="false">"暫停"</string>
+    <string name="text_7c9691192f1b7340" formatted="false">"繼續"</string>
+    <string name="text_8c4aeb99f859e601" formatted="false">"還沒有可預覽的桌面"</string>
+    <string name="text_115e712618ba1add" formatted="false">"連接一次電腦並儲存密碼後，這裡會顯示它的即時畫面。"</string>
+    <string name="text_45cb18137e3564c4" formatted="false">"預覽這個桌面，輕觸開始控制"</string>
+    <string name="text_c0f435c7a0088208" formatted="false">"預覽中"</string>
+    <string name="text_93b1e156152cfca4" formatted="false">"正在建立預覽連線…"</string>
+    <string name="text_ef31aa404424e6b0" formatted="false">"正在取得畫面"</string>
+    <string name="text_90e28b54e030bd66" formatted="false">"正在重新連線…"</string>
+    <string name="text_899e00ee93fae007" formatted="false">"預覽暫時無法使用"</string>
+    <string name="text_65b5f2031f9225bd" formatted="false">"正在切換顯示器"</string>
 </resources>

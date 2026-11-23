@@ -7,6 +7,8 @@ import java.util.Locale;
 final class L10n {
     private static volatile Context application;
     static void initialize(Context context) { application = context.getApplicationContext(); }
+    /** Application context for classes that are not activities (preview peers, wall tiles). */
+    static Context applicationContext() { return application; }
     static String tr(String key) {
         Context context = application;
         Integer id = LocalizationKeys.IDS.get(key);

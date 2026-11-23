@@ -59,6 +59,12 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         mainHandler.postDelayed(this,1000);
     }};
     private RemotePreviewStore previews;
+    private DesktopWallController wall;
+    private LinearLayout wallGrid;
+    private TextureView wallStream;
+    private final java.util.List<WallTile> wallTiles=new java.util.ArrayList<>();
+    private DesktopWallController pendingWallSurface;
+    private int pendingControlDisplay;
     private RemotePreviewStore.Capture previewCapture;
     private boolean previewCopying,updatingPreviewSwitch;
     private int previewAttempts;
@@ -135,7 +141,9 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             else if(page.equals("session"))motion=PageHost.Motion.SESSION_OUT;
             else motion=navigatingBack||nextPage.equals("home")?PageHost.Motion.POP:PageHost.Motion.PUSH;
         }
-        if(root!=null)hideKeyboard();page=nextPage;
+        if(root!=null)hideKeyboard();
+        if(page.equals("wall")&&!nextPage.equals("wall")&&wall!=null){wall.close();wall=null;wallGrid=null;wallStream=null;wallTiles.clear();}
+        page=nextPage;
         // Remote controls own the IME inset. Android 11–14 otherwise also resize
         // the content, unlike Android 15's enforced edge-to-edge layout.
         if(android.os.Build.VERSION.SDK_INT>=30&&android.os.Build.VERSION.SDK_INT<35)getWindow().setDecorFitsSystemWindows(!dark);
@@ -224,6 +232,9 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         TextView updateBadge=text("!",10,true);updateBadge.setTextColor(Color.WHITE);updateBadge.setGravity(Gravity.CENTER);updateBadge.setIncludeFontPadding(false);updateBadge.setBackground(ui.background(RED,8));updateBadge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);settingsUpdateDot=updateBadge;
         FrameLayout.LayoutParams updatePosition=new FrameLayout.LayoutParams(dp(16),dp(16),Gravity.TOP|Gravity.END);updatePosition.topMargin=-dp(3);updatePosition.setMarginEnd(-dp(5));settingsButton.addView(settingsUpdateDot,updatePosition);
         toolbar.addView(settingsButton,ui.size(40,40));renderAppUpdates();
+        // Desktop wall: live pictures of saved desktops; control starts only on tap.
+        View wallIcon=ui.iconButton("display",L10n.tr("桌面墙"),this::wallPage);
+        toolbar.addView(wallIcon,ui.size(40,40));toolbar.addView(new View(this),ui.size(12,1));
         HomeLayout layout=new HomeLayout(ui);root.addView(layout,new LinearLayout.LayoutParams(-1,0,1));LinearLayout content=layout.panels;
         LinearLayout connection=column();connection.setPadding(dp(18),dp(18),dp(18),dp(18));content.addView(ui.shadowCard(connection,20));
         connection.addView(text(L10n.tr("远程桌面"),20,true));ui.gap(connection,16);
@@ -476,6 +487,127 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         Window window=passwordDialog.getWindow();window.setLayout(width>=600?dp(Math.min(520,width-48)):-1,-2);
         window.setGravity(width>=600?Gravity.CENTER:Gravity.BOTTOM);
     }
+    /** Take control of a wall preview: keep the live peer instead of reconnecting. */
+    private void beginControl(String id,NativeSession live,boolean liveUsable){
+        if(session!=null){if(liveUsable&&live!=null)live.close();return;}
+        if(liveUsable&&live!=null&&!live.isClosed()){
+            ready=false;videoWidth=videoHeight=0;enteredPictureInPicture=false;remoteServiceAvailable=false;receivedFile=null;
+            resetRemoteVersionCheck();resetVideoSettings();
+            previewCapture=null;previewCopying=false;previewAttempts=0;
+            connectedRemote=id;pendingPassword="";muted=false;selectedDisplay=pendingControlDisplay;
+            hostPlatform="";remoteClipboard="";displays=new JSONArray();
+            session=live;live.setListener(this);
+            sessionScreen(preferences.getBoolean("autoLandscape",false));
+            // Only now that the interactive surface is attached is the wall surface released.
+            if(pendingWallSurface!=null){pendingWallSurface.disposeStream();pendingWallSurface=null;}
+            return;
+        }
+        if(liveUsable&&live!=null)live.close();
+        begin(id,"");
+    }
+    // ---------------- Desktop wall ----------------
+    /**
+     * Wall page: a tile per saved desktop with a live picture. Preview never sends input;
+     * tapping a tile opens the normal interactive screen and reuses its live peer.
+     */
+    private void wallPage(){
+        installRoot("wall",true);
+        backAction=()->home("");
+        wallTiles.clear();
+        if(wall!=null){wall.close();wall=null;}
+        wall=wallController();
+        LinearLayout content=ui.pageColumn(0);
+        LinearLayout bar=row();bar.setPadding(dp(12),dp(8),dp(12),dp(8));
+        TextView title=text(L10n.tr("桌面墙"),22,true);title.setTextColor(Color.WHITE);
+        bar.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        final TextView pause=text(L10n.tr("暂停"),14,true);
+        pause.setTextColor(0xFF8AB4F8);pause.setPadding(dp(10),dp(12),dp(10),dp(12));
+        pause.setOnClickListener(v->{
+            boolean paused=Boolean.TRUE.equals(pause.getTag());
+            pause.setTag(paused?null:Boolean.TRUE);
+            pause.setText(paused?L10n.tr("暂停"):L10n.tr("继续"));
+            if(wall!=null)wall.setPaused(!paused);
+        });
+        bar.addView(pause);
+        View closeButton=ui.iconButton("close",L10n.tr("返回"),()->home(""));
+        bar.addView(closeButton,ui.size(40,40));
+        content.addView(bar);
+        // Only saved desktops with a remembered password can stream unattended.
+        List<DesktopWallController.Entry> entries=new ArrayList<>();
+        JSONArray records=history.list(serverKey());
+        for(int i=0;i<records.length();i++){
+            JSONObject record=records.optJSONObject(i);
+            if(record==null)continue;
+            String id=record.optString("id");
+            if(id.isEmpty())continue;
+            String secret;
+            try{secret=history.password(serverKey(),id);}catch(Exception error){secret="";}
+            entries.add(new DesktopWallController.Entry(id,record.optString("platform"),
+                    RecentConnections.displayName(record),secret,
+                    Math.max(1,record.optInt("displays",1)),record.optInt("display",0)));
+        }
+        if(entries.isEmpty()){
+            LinearLayout empty=column();empty.setGravity(Gravity.CENTER);empty.setPadding(dp(24),dp(72),dp(24),dp(24));
+            TextView blank=text(L10n.tr("还没有可预览的桌面"),17,true);blank.setTextColor(Color.WHITE);blank.setGravity(Gravity.CENTER);empty.addView(blank);
+            ui.gap(empty,8);
+            TextView hint=text(L10n.tr("连接一次电脑并保存密码后，这里会显示它的实时画面。"),13,false);hint.setTextColor(0xFFB6B6BB);hint.setGravity(Gravity.CENTER);empty.addView(hint);
+            content.addView(empty);
+            ScrollView scroll=new ScrollView(this);scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+            wall.setVisible(false);
+            return;
+        }
+        int columns=wallColumns();
+        wallGrid=column();wallGrid.setPadding(dp(12),0,dp(12),dp(24));
+        LinearLayout currentRow=null;
+        for(int i=0;i<entries.size();i++){
+            if(i%columns==0){currentRow=row();currentRow.setGravity(Gravity.CENTER_VERTICAL);wallGrid.addView(currentRow);ui.gap(wallGrid,12);}
+            WallTile tile=new WallTile(ui);
+            LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(0,dp(wallTileHeight()),1f);
+            if(i%columns>0)cell.setMarginStart(dp(12));
+            currentRow.addView(tile,cell);
+            wallTiles.add(tile);
+        }
+        content.addView(wallGrid);
+        ScrollView scroll=new ScrollView(this);scroll.addView(content);
+        root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        // One shared picture surface is moved onto whichever tile owns the stream.
+        wallStream=new TextureView(this);
+        wallStream.setOpaque(true);
+        wallStream.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        safeArea.addView(wallStream,new FrameLayout.LayoutParams(-1,-1));
+        wall.attachTiles(wallTiles);
+        wall.setStreamHost(wallStream);
+        wall.setDevices(entries);
+        for(DesktopWallController.Entry entry:entries){
+            previews.load(serverKey(),entry.id,bitmap->{if(bitmap!=null&&wall!=null)wall.setStill(entry.id,bitmap);});
+        }
+        wall.setVisible(true);
+    }
+    private int wallColumns(){
+        int width=getResources().getConfiguration().screenWidthDp;
+        return width>=900?3:width>=600?2:1;
+    }
+    private int wallTileHeight(){
+        int width=getResources().getConfiguration().screenWidthDp;
+        int cellWidth=Math.max(160,(width-36)/wallColumns());
+        return Math.round(cellWidth*9f/16f)+46;
+    }
+    private DesktopWallController wallController(){
+        if(wall!=null)return wall;
+        return new DesktopWallController(new DesktopWallController.Host(){
+            public void openControl(String id,NativeSession live,boolean liveUsable){
+                DesktopWallController closing=wall;
+                wall=null;wallGrid=null;wallStream=null;wallTiles.clear();
+                pendingControlDisplay=closing==null?0:closing.displayHint();
+                if(closing!=null){
+                    closing.detachStream();
+                    if(liveUsable)pendingWallSurface=closing;else closing.disposeStream();
+                }
+                beginControl(id,live,liveUsable);
+            }
+            public void wallMessage(String message){toast(message);}
+        },host,port,serverKey().hashCode());
+    }
     private void begin(String id,String secret){
         if (session != null) return;
         videoWidth=videoHeight=0;enteredPictureInPicture=false;
@@ -531,6 +663,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         remoteOrientation.end();
         if(backgroundSession!=null){BackgroundSession retained=backgroundSession;backgroundSession=null;retained.detach(this);retained.finish(reason);}
         boolean closeWindow=isInPictureInPictureMode();
+        if(pendingWallSurface!=null){pendingWallSurface.disposeStream();pendingWallSurface=null;}
         pictureInPicture.disconnect();updatePictureInPicture();
         if(controls!=null)controls.cancelMouseInput();if(video!=null)video.releaseMouse();
         mainHandler.removeCallbacks(documentTimeout);documentSession=null;documentToSave=null;receivedFile=null;remoteServiceAvailable=false;
@@ -540,7 +673,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         if(progressDialog!=null){progressDialog.dismiss();progressDialog=null;}
         if(session!=null){releaseKeys();session.close();session=null;}
         if(!foreground)stopSignaling();
-        pendingPassword="";remoteClipboard="";hostPlatform="";displays=new JSONArray();ready=false;video=null;controls=null;getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        pendingPassword="";remoteClipboard="";hostPlatform="";displays=new JSONArray();ready=false;video=null;controls=null;pendingControlDisplay=0;getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if(closeWindow){finish();return;}
         home(reason);
         appUpdates.checkNow();
@@ -1089,9 +1222,9 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         super.onPictureInPictureUiStateChanged(state);
         if(android.os.Build.VERSION.SDK_INT>=35&&state.isTransitioningToPip())setPictureInPictureUi(true);
     }
-    @Override protected void onResume(){super.onResume();privacyChanged();if(!isInPictureInPictureMode())enteredPictureInPicture=false;setPictureInPictureUi(isInPictureInPictureMode());updatePictureInPicture();if(ready&&!canUsePictureInPicture())prepareBackgroundSession(true);if(backgroundSession!=null)requestBackgroundNotifications();}
+    @Override protected void onResume(){super.onResume();if(wall!=null&&"wall".equals(page))wall.setVisible(true);privacyChanged();if(!isInPictureInPictureMode())enteredPictureInPicture=false;setPictureInPictureUi(isInPictureInPictureMode());updatePictureInPicture();if(ready&&!canUsePictureInPicture())prepareBackgroundSession(true);if(backgroundSession!=null)requestBackgroundNotifications();}
     // onStart marks a new visit; focus/resume callbacks must not reopen a refused notice.
-    @Override protected void onPause(){releaseKeys();if(controls!=null)controls.cancelMouseInput();if(video!=null)video.releaseMouse();super.onPause();}
+    @Override protected void onPause(){if(wall!=null)wall.setVisible(false);releaseKeys();if(controls!=null)controls.cancelMouseInput();if(video!=null)video.releaseMouse();super.onPause();}
     @Override protected void onStart(){super.onStart();foreground=true;restoreBackgroundSession();appUpdates.setEnabled(preferences.getBoolean("networkConsent",false));if(!preferences.getBoolean("networkConsent",false))consent(this::renderSignaling);ensureSignaling();showConnectionMessage();}
     @Override protected void onStop(){dismissPrivacyUnlockDialog();if(controls!=null)controls.closeKeyboard();foreground=false;appUpdates.setEnabled(false);if(privacyDialog!=null)privacyDialog.dismiss();pageHost.finish();
         if(connectionDialog!=null)connectionDialog.dismiss();

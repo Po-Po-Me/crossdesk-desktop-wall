@@ -388,4 +388,17 @@
     <string name="text_53b856ab7ac9d8e2" formatted="false">"Direkte IP-Verbindung fehlgeschlagen. Adresse, Port und Netzwerk des Computers prüfen."</string>
     <string name="text_3a940622a8012b31" formatted="false">"Lokale Adresse"</string>
     <string name="text_2c5e32d2c5de5c2b" formatted="false">"Remote-Adresse"</string>
+    <string name="text_13d61fea9f174905" formatted="false">"Vorschau"</string>
+    <string name="text_8de76a8cc2a50699" formatted="false">"Tippen zum Steuern"</string>
+    <string name="text_8d12fc0d4eb26021" formatted="false">"Pausieren"</string>
+    <string name="text_7c9691192f1b7340" formatted="false">"Fortsetzen"</string>
+    <string name="text_8c4aeb99f859e601" formatted="false">"Noch keine Desktops zum Anzeigen"</string>
+    <string name="text_115e712618ba1add" formatted="false">"Verbinden Sie einen Desktop einmal und speichern Sie das Passwort; hier erscheint sein Livebild."</string>
+    <string name="text_45cb18137e3564c4" formatted="false">"Desktop-Vorschau, tippen zum Steuern"</string>
+    <string name="text_c0f435c7a0088208" formatted="false">"Vorschau läuft"</string>
+    <string name="text_93b1e156152cfca4" formatted="false">"Vorschauverbindung wird aufgebaut…"</string>
+    <string name="text_ef31aa404424e6b0" formatted="false">"Bild wird abgerufen"</string>
+    <string name="text_90e28b54e030bd66" formatted="false">"Verbindung wird erneuert…"</string>
+    <string name="text_899e00ee93fae007" formatted="false">"Vorschau nicht verfügbar"</string>
+    <string name="text_65b5f2031f9225bd" formatted="false">"Anzeige wird gewechselt"</string>
 </resources>

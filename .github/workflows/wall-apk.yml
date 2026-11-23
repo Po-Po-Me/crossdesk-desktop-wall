@@ -1,0 +1,248 @@
+name: Build wall APK
+
+# Builds the Desktop Wall fork on every push and publishes signed APKs to Releases.
+# Signing uses the repository's own keystore (WALL_KEYSTORE_BASE64 + password + alias).
+# Without those secrets the job still builds a debug APK and publishes that instead.
+
+on:
+  push:
+    branches: [master, main]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+    inputs:
+      patch:
+        description: "Patch number appended to the artifact version"
+        required: false
+        default: "0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wall-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Desktop Wall APK (arm64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      XMAKE_MIN_VERSION: "3.1.1"
+      PATCH_NUMBER: ${{ inputs.patch || '0' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Python
+        id: python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install native build tools
+        run: |
+          missing=()
+          for pkg in build-essential cmake ninja-build pkg-config autoconf automake libtool nasm; do
+            if [[ "$(dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null || true)" != "install ok installed" ]]; then
+              missing+=("${pkg}")
+            fi
+          done
+          if (( ${#missing[@]} )); then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends "${missing[@]}"
+          fi
+          python3 -m pip install --quiet setuptools wheel
+
+      # Isolated SDK directory: keeps the cache limited to this toolchain.
+      - name: Select Android SDK directory
+        run: |
+          echo "ANDROID_HOME=${RUNNER_TEMP}/crossdesk-android-sdk" >> "${GITHUB_ENV}"
+          echo "ANDROID_SDK_ROOT=${RUNNER_TEMP}/crossdesk-android-sdk" >> "${GITHUB_ENV}"
+
+      - name: Restore Android SDK
+        id: android-sdk-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ env.ANDROID_HOME }}
+          key: ${{ runner.os }}-${{ runner.arch }}-ubuntu24.04-android-sdk-v1-cli12266719-api36-build36.0.0-ndk28.2.13676358
+
+      - name: Set up Android SDK
+        if: steps.android-sdk-cache.outputs.cache-hit != 'true'
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: "12266719"
+          log-accepted-android-sdk-licenses: false
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0 ndk;28.2.13676358"
+
+      - name: Save Android SDK
+        if: steps.android-sdk-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.ANDROID_HOME }}
+          key: ${{ steps.android-sdk-cache.outputs.cache-primary-key }}
+
+      - name: Add Android tools to PATH
+        run: |
+          echo "${ANDROID_HOME}/cmdline-tools/16.0/bin" >> "${GITHUB_PATH}"
+          echo "${ANDROID_HOME}/platform-tools" >> "${GITHUB_PATH}"
+
+      - name: Install xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: ${{ env.XMAKE_MIN_VERSION }}
+          actions-cache-folder: .xmake-toolchain-cache
+          actions-cache-key: ${{ runner.os }}-${{ runner.arch }}-ubuntu24.04-android-xmake${{ env.XMAKE_MIN_VERSION }}
+
+      - name: Restore native dependencies
+        uses: actions/cache@v4
+        with:
+          path: apps/android/.native/packages
+          key: ${{ runner.os }}-${{ runner.arch }}-android-arm64-native-v2-ndk28.2.13676358-${{ hashFiles('apps/android/native/xmake.lua', 'deps/submodules/minirtc/xmake.lua', 'deps/submodules/minirtc/thirdparty/**') }}
+
+      - name: Prepare native dependencies
+        run: python3 -B apps/android/scripts/build_native.py --configure-only
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      # Keep the upstream tag readable but mark every artifact as the wall build.
+      - name: Resolve version
+        shell: python
+        run: |
+          import datetime
+          import os
+          import re
+          from pathlib import Path
+          properties = dict(
+              line.split("=", 1)
+              for line in (Path("apps/android/gradle.properties").read_text().splitlines())
+              if "=" in line and not line.lstrip().startswith("#")
+          )
+          name = properties["crossdeskVersionName"]
+          code = properties["crossdeskVersionCode"]
+          if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", name):
+              raise ValueError(f"Invalid version name {name!r}")
+          patch = os.environ.get("PATCH_NUMBER") or "0"
+          suffix = f"-{patch}" if patch != "0" else ""
+          date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
+          wall_code = int(code) * 100 + int(patch) % 100
+          with open(os.environ["GITHUB_ENV"], "a") as stream:
+              stream.write(f"ANDROID_VERSION_NAME={name}\n")
+              stream.write(f"ANDROID_VERSION_CODE={wall_code}\n")
+              stream.write(f"ARTIFACT_VERSION=v{name}-wall{suffix}-{date}\n")
+              stream.write(f"BUILD_SHA={os.environ.get('GITHUB_SHA', '')[:7]}\n")
+
+      - name: Build APKs
+        working-directory: apps/android
+        run: |
+          ./gradlew --no-daemon --stacktrace \
+            -PcrossdeskVersionName="${ANDROID_VERSION_NAME}" \
+            -PcrossdeskVersionCode="${ANDROID_VERSION_CODE}" \
+            :app:assembleDebug :app:assembleRelease
+
+      - name: Verify APKs
+        working-directory: apps/android
+        run: |
+          for APK in app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/release/app-release-unsigned.apk; do
+            python3 -B test/verify_apk.py "${APK}" \
+              --aapt2 "${ANDROID_HOME}/build-tools/36.0.0/aapt2" \
+              --version-name "${ANDROID_VERSION_NAME}" --version-code "${ANDROID_VERSION_CODE}"
+          done
+          "${ANDROID_HOME}/build-tools/36.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Sign Release APK
+        id: sign
+        env:
+          KEYSTORE_BASE64: ${{ secrets.WALL_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.WALL_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.WALL_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.WALL_KEY_PASSWORD }}
+        run: |
+          umask 077
+          work="$(mktemp -d "${RUNNER_TEMP}/wall-signing.XXXXXX")"
+          trap 'rm -rf -- "${work}"' EXIT
+          tools="${ANDROID_HOME}/build-tools/36.0.0"
+          out="${RUNNER_TEMP}/wall-apk"
+          mkdir -p "${out}"
+          unsigned="apps/android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          if [[ -n "${KEYSTORE_BASE64}" && -n "${KEYSTORE_PASSWORD}" && -n "${KEY_ALIAS}" ]]; then
+            printf '%s' "${KEYSTORE_BASE64}" | base64 --decode > "${work}/release.keystore"
+            "${tools}/zipalign" -P 16 -f -v 4 "${unsigned}" "${work}/aligned.apk"
+            "${tools}/apksigner" sign \
+              --ks "${work}/release.keystore" --ks-key-alias "${KEY_ALIAS}" \
+              --ks-pass "pass:${KEYSTORE_PASSWORD}" \
+              --key-pass "pass:${KEY_PASSWORD:-$KEYSTORE_PASSWORD}" \
+              --out "${out}/crossdesk-wall-arm64-${ARTIFACT_VERSION}.apk" \
+              "${work}/aligned.apk"
+            "${tools}/apksigner" verify --verbose --print-certs \
+              "${out}/crossdesk-wall-arm64-${ARTIFACT_VERSION}.apk"
+            echo "signed=true" >> "${GITHUB_OUTPUT}"
+            echo "apk=${out}/crossdesk-wall-arm64-${ARTIFACT_VERSION}.apk" >> "${GITHUB_OUTPUT}"
+          else
+            echo "::notice::No signing secrets; publishing the debug APK instead of a signed release."
+            cp apps/android/app/build/outputs/apk/debug/app-debug.apk \
+               "${out}/crossdesk-wall-arm64-${ARTIFACT_VERSION}-debug.apk"
+            echo "signed=false" >> "${GITHUB_OUTPUT}"
+            echo "apk=${out}/crossdesk-wall-arm64-${ARTIFACT_VERSION}-debug.apk" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: crossdesk-wall-arm64-${{ env.ARTIFACT_VERSION }}
+          path: ${{ steps.sign.outputs.apk }}
+          if-no-files-found: error
+
+      - name: Publish APK to Releases
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK: ${{ steps.sign.outputs.apk }}
+          SIGNED: ${{ steps.sign.outputs.signed }}
+        run: |
+          tag="wall-${ARTIFACT_VERSION}"
+          if [[ "${SIGNED}" == "true" ]]; then
+            signed_with="the repository release key"
+          else
+            signed_with="the CI debug key (no signing secrets configured)"
+          fi
+          cat > notes.md <<EOF
+          Desktop Wall build ${ARTIFACT_VERSION} from commit ${BUILD_SHA}.
+
+          Base: kunkundi/crossdesk v1.7.7, AGPL-3.0, with the wall feature added on top.
+
+          Wall changes:
+          - live preview tiles on the home screen (round-robin, one decode at a time)
+          - preview peers send no mouse/keyboard input
+          - reduced-cadence subscription via deskhub_preview when the host supports it
+          - tapping a tile takes control reusing the live peer, no second password prompt
+
+          Signed with ${signed_with}. arm64-v8a, Android 8.0 (API 26) and newer.
+          EOF
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" "${APK}" --clobber
+            gh release edit "${tag}" --notes-file notes.md
+          else
+            gh release create "${tag}" "${APK}" --title "Desktop Wall ${ARTIFACT_VERSION}" --notes-file notes.md --prerelease
+          fi
+          {
+            echo "### Desktop Wall ${ARTIFACT_VERSION}"
+            echo
+            echo "APK: \`$(basename "${APK}")\`"
+            echo
+            echo "Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${tag}"
+          } >> "${GITHUB_STEP_SUMMARY}"
