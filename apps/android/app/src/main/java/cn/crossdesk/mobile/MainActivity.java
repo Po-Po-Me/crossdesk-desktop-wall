@@ -704,8 +704,10 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         if(video!=null)video.setViewOnly(value);
         if(controls!=null)controls.setViewOnly(value);
         session.setInputBlocked(value);
-        // Return the stream to an interactive cadence if a wall preview throttled it.
-        session.streamMode(60,0,0,videoSettings.selection.quality,30,videoSettings.selection.preference);
+        // Return the stream to the encoder's own cadence: video settings, never a preview
+        // subscription, otherwise the host keeps a fixed preview frame gate afterwards.
+        session.restoreInteractiveCadence(videoSettings.selection.quality,
+                videoSettings.selection.frameRate,videoSettings.selection.preference);
         if(controls!=null)controls.setZoomFactor(value?video.zoomScale():1f);
         toast(L10n.tr(value?"仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制":"已开始控制"));
     }
@@ -1124,6 +1126,9 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             RemoteVideoSettings.Values applied=videoSettings.applied;
             preferences.edit().putInt("videoQuality",applied.quality)
                     .putInt("videoFrameRate",applied.frameRate).putInt("videoPreference",applied.preference).apply();
+            // A rejected request means the host could not honour the profile; keep the UI
+            // honest by falling back to the value it actually applied.
+            if(videoSettings.failed&&controls!=null)controls.videoSettings(videoSettings);
             return;
         }
         JSONObject info=message.optJSONObject("host_info");

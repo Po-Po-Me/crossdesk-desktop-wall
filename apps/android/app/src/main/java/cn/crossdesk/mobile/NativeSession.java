@@ -479,19 +479,17 @@ final class NativeSession implements AutoCloseable {
         });
     }
     /**
-     * Stream quality for a preview-only screen: full interactive cadence, input still off.
-     * Kept separate from {@link #previewStream} so the wall's throttle and the control
-     * screen's picture never fight over the same request id.
+     * Restore the purely interactive cadence after a preview subscription changed it.
+     *
+     * <p>A preview message with a positive fps is a demand for a fixed preview rate: the host
+     * stores it and applies a per-peer frame gate (1000/fps ms), which is why switching to
+     * 仅预览 and back left the picture at single-digit frame counts. Video settings carry the
+     * real encoder frame rate instead, so the interactive path must always use them.
      */
-    void streamMode(int fps,int width,int height,int quality,int frameRate,int preference){
+    void restoreInteractiveCadence(int quality,int frameRate,int preference){
         if(closed||!connected)return;
-        previewRequest++;
-        final long requestId=previewRequest;
-        previewPending=true;
-        execute(()->{if(!connected||closed)return;
-            if(!nPreview(handle,fps,width,height,quality,frameRate,preference,requestId))
-                ui(()->{if(requestId==previewRequest){previewPending=false;listener.previewStream(false,requestId);}});
-        });
+        final long request=++videoSettingsRequest;
+        execute(()->{if(connected&&!closed)nVideoSettings(handle,quality,frameRate==30?30:60,preference,request);});
     }
     /** Status of the last cadence request, for screens that show a picture without control. */
     boolean streamAccepted(){return previewAccepted;}
