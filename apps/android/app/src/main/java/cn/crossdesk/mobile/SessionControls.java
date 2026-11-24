@@ -56,7 +56,7 @@ final class SessionControls extends FrameLayout {
     private MobileUi.Icon privacyIcon;
     private TextView privacyFeedback,privacyCaption;
     private LinearLayout zoomChip;
-    private TextView zoomOut, zoomIn, zoomReset, zoomLabel;
+    private TextView zoomLabel;
     private View rotateButton;
     private TextView transferLabel,saveFileButton;
     private String transferStatus="";
@@ -85,23 +85,23 @@ final class SessionControls extends FrameLayout {
         ((FrameLayout)orb).removeAllViews();((FrameLayout)orb).addView(brand,new LayoutParams(ui.dp(46),ui.dp(46),Gravity.CENTER));
         orb.setBackground(ui.background(0xFFF5F5F7,27));orb.setElevation(ui.dp(7));addView(orb,new LayoutParams(ui.dp(54),ui.dp(54)));
         drag(orb,orb,()->{if(menu==null)openMenu("controls");else closeMenu();});
-        zoomChip=ui.row();zoomChip.setPadding(ui.dp(6),0,ui.dp(6),0);
+        // Watch-only zoom is gesture driven; the chip only reports the current factor.
+        zoomChip=ui.row();zoomChip.setPadding(ui.dp(10),0,ui.dp(10),0);
         zoomChip.setBackground(ui.background(0xE6202024,20));zoomChip.setElevation(ui.dp(6));
-        zoomOut=ui.action("−",Color.WHITE,()->actions.zoomStep(1/1.5f));zoomOut.setTextSize(20);zoomOut.setMinHeight(ui.dp(34));
-        zoomLabel=ui.text("1.0×",13,false);zoomLabel.setTextColor(Color.WHITE);zoomLabel.setGravity(Gravity.CENTER);zoomLabel.setMinWidth(ui.dp(46));
-        zoomIn=ui.action("+",Color.WHITE,()->actions.zoomStep(1.5f));zoomIn.setTextSize(20);zoomIn.setMinHeight(ui.dp(34));
-        zoomReset=ui.action(L10n.tr("还原"),Color.WHITE,actions::zoomReset);zoomReset.setTextSize(12);zoomReset.setMinHeight(ui.dp(34));
-        zoomChip.addView(zoomOut,ui.size(34,34));zoomChip.addView(zoomLabel,ui.size(50,34));
-        zoomChip.addView(zoomIn,ui.size(34,34));zoomChip.addView(zoomReset,ui.size(-2,34));
-        zoomChip.setClickable(true);
+        zoomLabel=ui.text("1.0×",13,false);zoomLabel.setTextColor(Color.WHITE);zoomLabel.setGravity(Gravity.CENTER);
+        zoomChip.addView(zoomLabel,ui.size(56,34));
         zoomChip.setVisibility(GONE);
         addView(zoomChip,new LayoutParams(-2,ui.dp(34)));
+        zoomChip.bringToFront();
         rotateButton=ui.iconButton("rotate",L10n.tr("切换横竖屏"),()->{
             android.app.Activity activity=(android.app.Activity)getContext();
             actions.rotate(!RemoteOrientation.isLandscape(activity));
         });
         rotateButton.setBackground(ui.background(0xE6202024,20));rotateButton.setElevation(ui.dp(6));
         addView(rotateButton,new LayoutParams(ui.dp(40),ui.dp(40)));
+        rotateButton.bringToFront();
+        // First layout may happen after construction; place both chips then.
+        post(() -> { positionRotate(); positionZoom(); });
     }
     void setRelative(boolean value){relative=value;if(menu!=null&&menuPage.equals("controls"))openMenu("controls");}
     void setHostPlatform(String platform){
@@ -135,7 +135,8 @@ final class SessionControls extends FrameLayout {
     private void positionRotate() {
         if (rotateButton == null) return;
         int w = getWidth(), h = getHeight();
-        if (w == 0 || h == 0) return;
+        if (w == 0 || h == 0) { rotateButton.post(this::positionRotate); return; }
+        rotateButton.setVisibility(VISIBLE);
         float size = ui.dp(40);
         float x = w - size - ui.dp(12);
         float y = ui.dp(12);
@@ -143,9 +144,10 @@ final class SessionControls extends FrameLayout {
         rotateButton.setTranslationY(y);
     }
     private void positionZoom() {
-        if (zoomChip == null || zoomChip.getVisibility() != VISIBLE) { positionRotate(); return; }
+        if (zoomChip == null) return;
+        if (zoomChip.getVisibility() != VISIBLE) { positionRotate(); return; }
         int w = getWidth(), h = getHeight();
-        if (w == 0 || h == 0) return;
+        if (w == 0 || h == 0) { zoomChip.post(this::positionZoom); return; }
         float chipW = ui.dp(34 * 3 + 50 + 12), chipH = ui.dp(34);
         float x = Float.isNaN(mouseX) ? w - chipW - ui.dp(16) : mouseX;
         float y = Float.isNaN(mouseY) ? h - chipH - ui.dp(24) : mouseY;

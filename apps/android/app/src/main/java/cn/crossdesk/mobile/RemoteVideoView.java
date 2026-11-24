@@ -74,6 +74,10 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     }
     RemoteVideoView(Context context, NativeSession session) {
         super(context); this.session = session;
+        setFocusable(true);
+        setFocusableInTouchMode(true);
+        // Own every gesture here: the SurfaceView child must not take the multi-touch stream.
+        setOnTouchListener(null);
         mouseInput = new RemoteMouseInput(this::sendMouse);
         mouseInput.relativeMotion = this::moveRelative;
         setBackgroundColor(Color.BLACK);
@@ -251,7 +255,7 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
             return true;
         }
         if (action == MotionEvent.ACTION_MOVE) {
-            if (e.getPointerCount() >= 2) movePinch(e);
+            if (e.getPointerCount() >= 2) { viewOnlyPinchSamples++; movePinch(e); }
             else if (viewport.isZoomed()) panViewOnly(e);
             return true;
         }
@@ -265,7 +269,7 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         if (action == MotionEvent.ACTION_UP) {
             boolean tap = !pinching && SystemClock.elapsedRealtime() - viewOnlyDownAt < 260
                     && Math.hypot(e.getX() - viewOnlyDownX, e.getY() - viewOnlyDownY) < pinchSlop * 3;
-            if (tap) handleViewOnlyTap(e.getX(), e.getY());
+            if (tap) { viewOnlyTaps++; handleViewOnlyTap(e.getX(), e.getY()); }
             twoFinger = false;
             pinching = false;
             viewport.finishGesture();
@@ -283,6 +287,8 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     }
 
     private float pinchStartSpan;
+    /** Watch-only gesture counters, also used by logcat to confirm fingers reach this view. */
+    int viewOnlyPinchSamples, viewOnlyTaps;
     private void startPinch(MotionEvent e) { startPinch(e, -1); }
     private void startPinch(MotionEvent e, int skipIndex) {
         float[] focus = focus(e, skipIndex);
@@ -293,17 +299,18 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     private void movePinch(MotionEvent e) {
         if (pinchStartSpan <= 0) startPinch(e);
         float[] focus = focus(e, -1);
-        float span = Math.max(pinchSlop, span(e, focus[0], focus[1], -1));
-        if (Math.abs(span - pinchStartSpan) >= pinchSlop) pinching = true;
-        if (pinching) {
-            viewport.zoomBy(span / pinchStartSpan, twoFingerX, twoFingerY);
-            pinchStartSpan = span;
-            if (viewport.isZoomed()) viewport.panBy(focus[0] - twoFingerX, focus[1] - twoFingerY);
-            twoFingerX = focus[0];
-            twoFingerY = focus[1];
-            applyViewport();
-            viewOnlyFeedback.run();
-        }
+        // No slop gate: any finger-spread change scales the picture immediately, so a slow or
+        // short pinch still zooms. The ratio is clamped to keep one bad sample from jumping.
+        float span = Math.max(1f, span(e, focus[0], focus[1], -1));
+        float ratio = Math.max(0.5f, Math.min(2f, span / pinchStartSpan));
+        pinching = true;
+        viewport.zoomBy(ratio, twoFingerX, twoFingerY);
+        pinchStartSpan = span;
+        if (viewport.isZoomed()) viewport.panBy(focus[0] - twoFingerX, focus[1] - twoFingerY);
+        twoFingerX = focus[0];
+        twoFingerY = focus[1];
+        applyViewport();
+        viewOnlyFeedback.run();
     }
     private void panViewOnly(MotionEvent e) {
         float dx = e.getX() - lastX, dy = e.getY() - lastY;
@@ -400,6 +407,9 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     @Override public void surfaceCreated(SurfaceHolder holder) { session.surface(holder.getSurface()); }
     @Override public void surfaceChanged(SurfaceHolder holder,int format,int width,int height) { }
     @Override public void surfaceDestroyed(SurfaceHolder holder) { releaseMouse(); session.surface(null); }
+    @Override public boolean onInterceptTouchEvent(MotionEvent event) { return true; }
+    /** Watch-only gestures arrive here; the SurfaceView child never receives them. */
+    @Override public boolean onTouchEvent(MotionEvent event) { return touch(event); }
     @Override protected void onDetachedFromWindow() { releaseMouse(); super.onDetachedFromWindow(); }
     private final class Cursor extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);

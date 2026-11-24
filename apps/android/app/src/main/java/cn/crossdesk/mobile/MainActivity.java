@@ -653,7 +653,15 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             public void mute(){muted=!muted;if(session!=null)session.control(2,muted?0:1);controls.setMuted(muted);}
             public void mouse(){boolean relative=!preferences.getBoolean("relativeMouse",true);preferences.edit().putBoolean("relativeMouse",relative).apply();video.setRelative(relative);controls.setRelative(relative);}
             public void displayResolution(RemoteDisplayResolutions.Mode mode){updateDisplayResolution(mode);}
-            public void videoSettings(int field,int value){RemoteVideoSettings.Values old=MainActivity.this.videoSettings.selection;updateVideoSettings(new RemoteVideoSettings.Values(field==0?value:old.quality,field==1?value:old.frameRate,field==2?value:old.preference));}
+            public void videoSettings(int field,int value){
+                RemoteVideoSettings.Values old=MainActivity.this.videoSettings.selection;
+                RemoteVideoSettings.Values next=new RemoteVideoSettings.Values(
+                        field==0?value:old.quality,field==1?value:old.frameRate,field==2?value:old.preference);
+                // Remember the choice so the next session starts from it.
+                preferences.edit().putInt("videoQuality",next.quality).putInt("videoFrameRate",next.frameRate)
+                        .putInt("videoPreference",next.preference).apply();
+                updateVideoSettings(next);
+            }
             public void toggleViewOnly(){setViewOnly(!viewOnlySession);}
             public void zoomStep(float factor){
                 if(video==null||!viewOnlySession)return;
@@ -1070,15 +1078,16 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         cancelDisplayResolutionTimeout();displayResolutions=new RemoteDisplayResolutions();
         cancelVideoSettingsTimeout();
         android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();
-        videoSettings=new RemoteVideoSettings(preferences.getInt("videoPreference",1),Math.max(metrics.widthPixels,metrics.heightPixels));
-        // Wall build default: high picture quality at 60 fps until the user changes it.
-        // Wall build default: high picture quality at 60 fps. One-shot migration keeps any
-        // choice the user makes in the settings screen.
-        if(preferences.getInt("videoDefaultsVersion",0)<1){
-            videoSettings.selection=videoSettings.applied=RemoteVideoSettings.preferred(
-                    preferences.getInt("videoPreference",1),Math.max(metrics.widthPixels,metrics.heightPixels));
-            preferences.edit().putInt("videoDefaultsVersion",1).apply();
-        }
+        // Wall build default: high picture quality at 60 fps for every session. The choice is
+        // stored, so a value the user picks in 画面设置 (or a downshift the host confirmed)
+        // survives reconnects; only a first run seeds it.
+        int quality=preferences.getInt("videoQuality",2);
+        int frameRate=preferences.getInt("videoFrameRate",60);
+        videoSettings=new RemoteVideoSettings(preferences.getInt("videoPreference",1),
+                Math.max(metrics.widthPixels,metrics.heightPixels));
+        videoSettings.selection=videoSettings.applied=new RemoteVideoSettings.Values(
+                Math.max(0,Math.min(2,quality)),frameRate==30?30:60,
+                Math.max(0,Math.min(2,preferences.getInt("videoPreference",1))));
     }
     private void updateVideoSettings(RemoteVideoSettings.Values value){
         if(!ready||session==null||!preferences.getBoolean("networkConsent",false))return;
@@ -1096,7 +1105,16 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             if(message.optInt("type",-1)==16)return;
         }
         if(message.optInt("type",-1)==5){JSONObject service=message.optJSONObject("service_status");remoteServiceAvailable=service!=null&&service.optBoolean("available",false);return;}
-        if(message.optInt("type",-1)==12){if(!ready)return;videoSettings.receive(message);if(!videoSettings.pending)cancelVideoSettingsTimeout();if(controls!=null)controls.videoSettings(videoSettings);return;}
+        if(message.optInt("type",-1)==12){
+            if(!ready)return;
+            videoSettings.receive(message);
+            if(!videoSettings.pending)cancelVideoSettingsTimeout();
+            if(controls!=null)controls.videoSettings(videoSettings);
+            RemoteVideoSettings.Values applied=videoSettings.applied;
+            preferences.edit().putInt("videoQuality",applied.quality)
+                    .putInt("videoFrameRate",applied.frameRate).putInt("videoPreference",applied.preference).apply();
+            return;
+        }
         JSONObject info=message.optJSONObject("host_info");
         if(info!=null){
             hostPlatform=info.optString("platform","");JSONArray list=info.optJSONArray("displays");if(list!=null)displays=list;history.metadata(serverKey(),connectedRemote,info.optString("host_name"),hostPlatform);
