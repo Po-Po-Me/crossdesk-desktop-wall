@@ -80,6 +80,13 @@ public final class MainActivity extends Activity implements NativeSession.Listen
      * user touched 画面设置, encoder stuck at 854 kbps). Keep re-sending until the host ACKs.
      */
     private boolean videoProfilePending;
+    /**
+     * Guard so the refresh runs exactly once per session. Scheduling it from every ACK made
+     * each refresh emit two more ACKs, doubling the schedule each round: the host log shows 71
+     * encoder re-creations in ~70 s at 0.4-0.7 s intervals, which is the "rises, drops, climbs
+     * again" the user saw.
+     */
+    private boolean videoRefreshScheduled;
     private final Runnable videoProfileTicker=new Runnable(){public void run(){
         if(!videoProfilePending||session==null||session.isClosed()){videoProfilePending=false;return;}
         if(!videoSettings.supported||videoSettings.pending||videoProfileAttempts>=20){
@@ -1110,6 +1117,8 @@ public final class MainActivity extends Activity implements NativeSession.Listen
     private void resetVideoSettings(){
         cancelDisplayResolutionTimeout();displayResolutions=new RemoteDisplayResolutions();
         cancelVideoSettingsTimeout();
+        videoRefreshScheduled=false;videoProfilePending=false;
+        mainHandler.removeCallbacks(videoProfileTicker);
         android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();
         // Seed 高画质 + 60fps once per install. Older builds persisted the host's *echoed*
         // value (中画质 / 30fps), so an upgraded phone kept connecting with quality=1 fps=30 and
@@ -1156,8 +1165,9 @@ public final class MainActivity extends Activity implements NativeSession.Listen
      * preference (which forces re-creation) and immediately restoring the chosen profile.
      */
     private void scheduleEncoderRefresh(){
-        mainHandler.postDelayed(this::forceEncoderRefresh,9000);
-        mainHandler.postDelayed(this::forceEncoderRefresh,20000);
+        // One refresh is enough: the user's manual change always landed at about this point,
+        // and every re-creation costs a keyframe plus encoder init on the host.
+        mainHandler.postDelayed(this::forceEncoderRefresh,12000);
     }
     private void forceEncoderRefresh(){
         if(session==null||session.isClosed()||!videoSettings.supported)return;
@@ -1203,7 +1213,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
                 // Host confirmed 高画质/60fps; stop re-sending and plan one refresh.
                 videoProfilePending=false;videoProfileAttempts=0;
                 mainHandler.removeCallbacks(videoProfileTicker);
-                scheduleEncoderRefresh();
+                if(!videoRefreshScheduled){videoRefreshScheduled=true;scheduleEncoderRefresh();}
             }
             if(controls!=null)controls.videoSettings(videoSettings);
             // The host only echoes what it applied; persisting that echo is what quietly
