@@ -94,7 +94,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
      * a sustained low inbound video bitrate, or a sharp drop from a good one, means the encoder
      * is pinned and should be re-created — with a cooldown and a per-session cap.
      */
-    private long videoLowSince, videoLastRefreshAt, videoBestBitrate;
+    private long videoLowSince, videoLastRefreshAt, videoBestBitrate, videoCurrentBitrate;
     private int videoRefreshCount;
     private static final long VIDEO_LOW_BITRATE=6_000_000L, VIDEO_LOW_HOLD_MS=8000,
             VIDEO_REFRESH_COOLDOWN_MS=15000;
@@ -1129,7 +1129,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         cancelDisplayResolutionTimeout();displayResolutions=new RemoteDisplayResolutions();
         cancelVideoSettingsTimeout();
         videoRefreshScheduled=false;videoProfilePending=false;
-        videoLowSince=0;videoLastRefreshAt=0;videoBestBitrate=0;videoRefreshCount=0;
+        videoLowSince=0;videoLastRefreshAt=0;videoBestBitrate=0;videoRefreshCount=0;videoCurrentBitrate=0;
         mainHandler.removeCallbacks(videoProfileTicker);
         android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();
         // Seed 高画质 + 60fps once per install. Older builds persisted the host's *echoed*
@@ -1176,26 +1176,49 @@ public final class MainActivity extends Activity implements NativeSession.Listen
      * seconds of traffic, so re-create it once after ~9 s and once after ~20 s by toggling the
      * preference (which forces re-creation) and immediately restoring the chosen profile.
      */
+    /**
+     * Warm-up ladder. Host logs show the working behaviour: a re-creation only gets a high
+     * bitrate once bandwidth estimation has ramped (the encoder is created with the estimate of
+     * that instant and cannot be retuned later). Try at fixed offsets and skip a step when the
+     * picture is already fast, so a good link is not disturbed.
+     */
     private void scheduleEncoderRefresh(){
-        // One refresh is enough: the user's manual change always landed at about this point,
-        // and every re-creation costs a keyframe plus encoder init on the host.
-        mainHandler.postDelayed(this::forceEncoderRefresh,12000);
+        long[] offsets={4000,10000,18000,30000};
+        for(long offset:offsets) mainHandler.postDelayed(this::warmUpStep,offset);
     }
+    private void warmUpStep(){
+        if(session==null||session.isClosed()||!ready||viewOnlySession)return;
+        if(videoCurrentBitrate>=VIDEO_LOW_BITRATE)return;
+        long now=SystemClock.elapsedRealtime();
+        if(videoRefreshCount>=6||(videoLastRefreshAt!=0&&now-videoLastRefreshAt<VIDEO_REFRESH_COOLDOWN_MS))return;
+        videoRefreshCount++;videoLastRefreshAt=now;
+        forceEncoderRefresh();
+    }
+    private long fallbackVideoRequest;
     private void forceEncoderRefresh(){
-        if(session==null||session.isClosed()||!videoSettings.supported)return;
-        if(viewOnlySession)return;
+        if(session==null||session.isClosed()||viewOnlySession)return;
         RemoteVideoSettings.Values real=videoSettings.selection;
         int alternate=real.preference==0?1:0;
         RemoteVideoSettings.Values alt=new RemoteVideoSettings.Values(real.quality,real.frameRate,alternate);
-        long first=videoSettings.begin(alt);
-        if(first<0)return;
-        session.videoSettings(alt,first);
+        // Before host_info announces support there is nothing to negotiate with; fall back to a
+        // raw send so a session that lost the capability message can still be woken up.
+        if(videoSettings.supported){
+            long first=videoSettings.begin(alt);
+            if(first<0)return;
+            session.videoSettings(alt,first);
+        }else{
+            session.videoSettings(alt,++fallbackVideoRequest);
+        }
         mainHandler.postDelayed(()->{
             if(session==null||session.isClosed())return;
-            long second=videoSettings.begin(real);
-            if(second<0)return;
-            if(controls!=null)controls.videoSettings(videoSettings);
-            session.videoSettings(real,second);
+            if(videoSettings.supported){
+                long second=videoSettings.begin(real);
+                if(second<0)return;
+                if(controls!=null)controls.videoSettings(videoSettings);
+                session.videoSettings(real,second);
+            }else{
+                session.videoSettings(real,++fallbackVideoRequest);
+            }
         },700);
     }
     private boolean sendVideoProfile(){
@@ -1301,12 +1324,13 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         if(video==null||video.inbound<0)return;
         long now=SystemClock.elapsedRealtime();
         long bps=video.inbound;
+        videoCurrentBitrate=bps;
         if(bps>videoBestBitrate)videoBestBitrate=bps;
         boolean dropped=videoBestBitrate>=12_000_000L&&bps<videoBestBitrate/3;
         if(bps>=VIDEO_LOW_BITRATE&&!dropped){videoLowSince=0;return;}
         if(videoLowSince==0){videoLowSince=now;return;}
         if(now-videoLowSince<VIDEO_LOW_HOLD_MS)return;
-        if(videoRefreshCount>=4||now-videoLastRefreshAt<VIDEO_REFRESH_COOLDOWN_MS)return;
+        if(videoRefreshCount>=8||now-videoLastRefreshAt<VIDEO_REFRESH_COOLDOWN_MS)return;
         videoRefreshCount++;videoLastRefreshAt=now;videoLowSince=0;videoBestBitrate=bps;
         forceEncoderRefresh();
     }
