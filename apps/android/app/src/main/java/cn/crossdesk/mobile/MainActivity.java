@@ -1094,9 +1094,14 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         cancelDisplayResolutionTimeout();displayResolutions=new RemoteDisplayResolutions();
         cancelVideoSettingsTimeout();
         android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();
-        // Wall build default: high picture quality at 60 fps for every session. The choice is
-        // stored, so a value the user picks in 画面设置 (or a downshift the host confirmed)
-        // survives reconnects; only a first run seeds it.
+        // Seed 高画质 + 60fps once per install. Older builds persisted the host's *echoed*
+        // value (中画质 / 30fps), so an upgraded phone kept connecting with quality=1 fps=30 and
+        // the encoder was created at ~1-2 Mbps. The seed is versioned to correct that exactly
+        // once; afterwards only an explicit choice in 画面设置 rewrites these keys.
+        if(preferences.getInt("videoProfileSeed",0)<2){
+            preferences.edit().putInt("videoQuality",2).putInt("videoFrameRate",60)
+                    .putInt("videoPreference",1).putInt("videoProfileSeed",2).apply();
+        }
         int quality=preferences.getInt("videoQuality",2);
         int frameRate=preferences.getInt("videoFrameRate",60);
         videoSettings=new RemoteVideoSettings(preferences.getInt("videoPreference",1),
@@ -1153,9 +1158,8 @@ public final class MainActivity extends Activity implements NativeSession.Listen
                 videoProfileAttempts=0;cancelVideoProfileRetry();
             }
             if(controls!=null)controls.videoSettings(videoSettings);
-            RemoteVideoSettings.Values applied=videoSettings.applied;
-            preferences.edit().putInt("videoQuality",applied.quality)
-                    .putInt("videoFrameRate",applied.frameRate).putInt("videoPreference",applied.preference).apply();
+            // The host only echoes what it applied; persisting that echo is what quietly
+            // demoted the saved profile to 中画质/30fps. Only an explicit pick persists now.
             // A rejected request means the host could not honour the profile; keep the UI
             // honest by falling back to the value it actually applied.
             if(videoSettings.failed&&controls!=null)controls.videoSettings(videoSettings);

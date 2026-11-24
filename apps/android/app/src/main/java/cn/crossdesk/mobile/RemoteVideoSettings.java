@@ -64,6 +64,7 @@ final class RemoteVideoSettings {
             receive(new Values((int)quality,(int)rate,(int)preference),settings.getLong("request_id"),Boolean.TRUE.equals(accepted));
         }catch(org.json.JSONException ignored){ }
     }
-    void expire(long expiredId){if(pending&&expiredId==requestId){selection=applied;pending=false;failed=true;}}
+    /** A timeout must not silently undo the user's choice; keep the request and report it. */
+    void expire(long expiredId){if(pending&&expiredId==requestId){pending=false;failed=true;}}
     String feedback(){return !supported?L10n.tr("连接建立后可调整，需被控端支持。"):failed?L10n.tr("调整失败，请重试。"):"";}
 }
