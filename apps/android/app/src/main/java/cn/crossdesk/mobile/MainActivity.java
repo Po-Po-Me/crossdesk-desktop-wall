@@ -15,6 +15,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.text.*;
 import android.text.method.PasswordTransformationMethod;
 import android.view.*;
@@ -87,6 +88,16 @@ public final class MainActivity extends Activity implements NativeSession.Listen
      * again" the user saw.
      */
     private boolean videoRefreshScheduled;
+    /**
+     * Adaptive refresh state. A fixed timer proved unreliable (a session with no ACK never got
+     * one, another stayed at 0.85 Mbps for 88 s). Watch what the host actually sends instead:
+     * a sustained low inbound video bitrate, or a sharp drop from a good one, means the encoder
+     * is pinned and should be re-created — with a cooldown and a per-session cap.
+     */
+    private long videoLowSince, videoLastRefreshAt, videoBestBitrate;
+    private int videoRefreshCount;
+    private static final long VIDEO_LOW_BITRATE=6_000_000L, VIDEO_LOW_HOLD_MS=8000,
+            VIDEO_REFRESH_COOLDOWN_MS=15000;
     private final Runnable videoProfileTicker=new Runnable(){public void run(){
         if(!videoProfilePending||session==null||session.isClosed()){videoProfilePending=false;return;}
         if(!videoSettings.supported||videoSettings.pending||videoProfileAttempts>=20){
@@ -1118,6 +1129,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         cancelDisplayResolutionTimeout();displayResolutions=new RemoteDisplayResolutions();
         cancelVideoSettingsTimeout();
         videoRefreshScheduled=false;videoProfilePending=false;
+        videoLowSince=0;videoLastRefreshAt=0;videoBestBitrate=0;videoRefreshCount=0;
         mainHandler.removeCallbacks(videoProfileTicker);
         android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();
         // Seed 高画质 + 60fps once per install. Older builds persisted the host's *echoed*
@@ -1213,7 +1225,12 @@ public final class MainActivity extends Activity implements NativeSession.Listen
                 // Host confirmed 高画质/60fps; stop re-sending and plan one refresh.
                 videoProfilePending=false;videoProfileAttempts=0;
                 mainHandler.removeCallbacks(videoProfileTicker);
-                if(!videoRefreshScheduled){videoRefreshScheduled=true;scheduleEncoderRefresh();}
+                if(!videoRefreshScheduled){
+                    videoRefreshScheduled=true;
+                    // First nudge at 12 s; the bitrate watchdog takes over from there.
+                    videoLastRefreshAt=SystemClock.elapsedRealtime();videoRefreshCount=1;
+                    scheduleEncoderRefresh();
+                }
             }
             if(controls!=null)controls.videoSettings(videoSettings);
             // The host only echoes what it applied; persisting that echo is what quietly
@@ -1267,7 +1284,32 @@ public final class MainActivity extends Activity implements NativeSession.Listen
     }
     @Override public void videoSize(int width,int height){videoWidth=width;videoHeight=height;if(video!=null)video.videoSize(width,height);if(controls!=null)controls.videoSize(width,height);pictureInPicture.videoSize(width,height);updatePictureInPicture();}
     @Override public void clipboard(String value){remoteClipboard=value;}
-    @Override public void statistics(RemoteNetworkStatistics.Snapshot value){if(controls!=null)controls.statistics(value);if(value.fps>0)capturePreviewIfNeeded();}
+    @Override public void statistics(RemoteNetworkStatistics.Snapshot value){
+        if(controls!=null)controls.statistics(value);
+        if(value.fps>0)capturePreviewIfNeeded();
+        considerEncoderRefresh(value);
+    }
+    /**
+     * Ask for an encoder re-creation when the delivered video bitrate is pinned low. The host's
+     * QuickSync encoder cannot be retuned at runtime, so a re-creation is the only way out, and
+     * it must happen while bandwidth estimation is healthy.
+     */
+    private void considerEncoderRefresh(RemoteNetworkStatistics.Snapshot value){
+        if(session==null||session.isClosed()||!ready||viewOnlySession||!videoSettings.supported)return;
+        if(value.report==null)return;
+        RemoteNetworkStatistics.Traffic video=value.report.traffic[0];
+        if(video==null||video.inbound<0)return;
+        long now=SystemClock.elapsedRealtime();
+        long bps=video.inbound;
+        if(bps>videoBestBitrate)videoBestBitrate=bps;
+        boolean dropped=videoBestBitrate>=12_000_000L&&bps<videoBestBitrate/3;
+        if(bps>=VIDEO_LOW_BITRATE&&!dropped){videoLowSince=0;return;}
+        if(videoLowSince==0){videoLowSince=now;return;}
+        if(now-videoLowSince<VIDEO_LOW_HOLD_MS)return;
+        if(videoRefreshCount>=4||now-videoLastRefreshAt<VIDEO_REFRESH_COOLDOWN_MS)return;
+        videoRefreshCount++;videoLastRefreshAt=now;videoLowSince=0;videoBestBitrate=bps;
+        forceEncoderRefresh();
+    }
     @Override public boolean dispatchKeyEvent(KeyEvent event){
         if (privacyUnlockDialog != null) return super.dispatchKeyEvent(event);
         int code=KeyMap.windowsCode(event.getKeyCode());View focus=getCurrentFocus();
