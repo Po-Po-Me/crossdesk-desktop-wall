@@ -106,7 +106,7 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     void remoteCursorDisplay(int display) {
         if (remoteCursorDisplay == display) return;
         remoteCursorDisplay = display;
-        remoteCursor.invalidate();
+        cursor.invalidate();
     }
     private boolean suppressPointerGesture() {
         return suppressPointerGesture || mouseInput.hasVirtualButton() || touchRevision != mouseInput.revision();
@@ -499,16 +499,17 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         canvas.save();
         canvas.translate(px, py);
         canvas.scale(density, density);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(1.75f);
-        paint.setColor(Color.BLACK);
-        canvas.drawPath(cursorPathFor(remoteCursorShape), paint);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(Color.WHITE);
-        canvas.drawPath(cursorPathFor(remoteCursorShape), paint);
+        remoteCursorPaint.setStyle(Paint.Style.STROKE);
+        remoteCursorPaint.setStrokeWidth(1.75f);
+        remoteCursorPaint.setColor(Color.BLACK);
+        canvas.drawPath(cursorPathFor(remoteCursorShape), remoteCursorPaint);
+        remoteCursorPaint.setStyle(Paint.Style.FILL);
+        remoteCursorPaint.setColor(Color.WHITE);
+        canvas.drawPath(cursorPathFor(remoteCursorShape), remoteCursorPaint);
         canvas.restore();
     }
 
+    private final Paint remoteCursorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path remoteCursorPath = new Path();
     private int remoteCursorPathShape = -1;
     /** Arrow for the common shapes, crosshair/insertion for text, resize arrows otherwise. */
