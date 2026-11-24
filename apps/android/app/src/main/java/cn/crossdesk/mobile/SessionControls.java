@@ -87,8 +87,8 @@ final class SessionControls extends FrameLayout {
         drag(orb,orb,()->{if(menu==null)openMenu("controls");else closeMenu();});
         // Watch-only zoom is gesture driven; the chip only reports the current factor.
         zoomChip=ui.row();zoomChip.setPadding(ui.dp(10),0,ui.dp(10),0);
-        zoomChip.setBackground(ui.background(0xE6202024,20));zoomChip.setElevation(ui.dp(6));
-        zoomLabel=ui.text("1.0×",13,false);zoomLabel.setTextColor(Color.WHITE);zoomLabel.setGravity(Gravity.CENTER);
+        zoomChip.setBackground(ui.background(0xF2FFFFFF,20));zoomChip.setElevation(ui.dp(6));
+        zoomLabel=ui.text("1.0×",13,false);zoomLabel.setTextColor(0xFF1C1C1E);zoomLabel.setGravity(Gravity.CENTER);
         zoomChip.addView(zoomLabel,ui.size(56,34));
         zoomChip.setVisibility(GONE);
         addView(zoomChip,new LayoutParams(-2,ui.dp(34)));
@@ -97,7 +97,11 @@ final class SessionControls extends FrameLayout {
             android.app.Activity activity=(android.app.Activity)getContext();
             actions.rotate(!RemoteOrientation.isLandscape(activity));
         });
-        rotateButton.setBackground(ui.background(0xE6202024,20));rotateButton.setElevation(ui.dp(6));
+        // White chip with a dark glyph so it stays visible over any picture.
+        rotateButton.setBackground(ui.background(0xF2FFFFFF,20));rotateButton.setElevation(ui.dp(6));
+        ((FrameLayout)rotateButton).removeAllViews();
+        MobileUi.Icon rotateGlyph=ui.icon("rotate",0xFF1C1C1E);
+        ((FrameLayout)rotateButton).addView(rotateGlyph,new FrameLayout.LayoutParams(ui.dp(22),ui.dp(22),Gravity.CENTER));
         addView(rotateButton,new LayoutParams(ui.dp(40),ui.dp(40)));
         rotateButton.bringToFront();
         // First layout may happen after construction; place both chips then.
@@ -266,7 +270,7 @@ final class SessionControls extends FrameLayout {
     void setOrientationLandscape(boolean landscape) {
         if (rotateButton == null) return;
         rotateButton.setContentDescription(L10n.tr(landscape ? "切换到竖屏" : "切换到横屏"));
-        rotateButton.setAlpha(0.95f);
+        rotateButton.setAlpha(1f);
     }
 
     private void renderPrivacy(){

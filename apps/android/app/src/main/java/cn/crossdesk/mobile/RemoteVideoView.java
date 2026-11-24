@@ -39,6 +39,14 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     private long touchRevision;
     private boolean suppressPointerGesture;
     private boolean viewOnly;
+    // Remote cursor presentation, reported by the host on the mouse stream. The captured
+    // frame usually excludes the pointer, so the phone draws it at the host's coordinates.
+    private boolean remoteCursorReported, remoteCursorVisible, remoteCursorPositionValid;
+    private float remoteCursorX = .5f, remoteCursorY = .5f;
+    private float remoteCursorOffsetX, remoteCursorOffsetY;
+    private int remoteCursorShape, remoteCursorDisplay = -1;
+    private long remoteCursorSequence = Long.MIN_VALUE;
+    private boolean cursorTracked;
     private long viewOnlyDownAt, viewOnlyLastTap;
     private float viewOnlyDownX, viewOnlyDownY;
     /** Notified when the local zoom changes so the screen can show the current factor. */
@@ -69,6 +77,37 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         cursor.setVisibility(value?GONE:VISIBLE);
     }
     boolean viewOnly() { return viewOnly; }
+
+    /**
+     * Apply one cursor_state sample. Only newer sequences win; a position sample for another
+     * display is ignored so a mirror of monitor 2 does not paint a pointer onto monitor 1.
+     */
+    void remoteCursor(boolean visible, int shape, boolean positionUpdate, boolean positionValid,
+                      float x, float y, float offsetX, float offsetY, int display, long sequence) {
+        if (sequence != 0 && sequence <= remoteCursorSequence) return;
+        remoteCursorSequence = sequence;
+        remoteCursorReported = true;
+        remoteCursorVisible = visible;
+        remoteCursorShape = Math.max(0, Math.min(28, shape));
+        remoteCursorOffsetX = offsetX;
+        remoteCursorOffsetY = offsetY;
+        if (positionUpdate) {
+            remoteCursorDisplay = display;
+            if (positionValid) {
+                remoteCursorPositionValid = true;
+                remoteCursorX = Math.max(0f, Math.min(1f, x));
+                remoteCursorY = Math.max(0f, Math.min(1f, y));
+            } else {
+                remoteCursorPositionValid = false;
+            }
+        }
+        cursor.invalidate();
+    }
+    void remoteCursorDisplay(int display) {
+        if (remoteCursorDisplay == display) return;
+        remoteCursorDisplay = display;
+        remoteCursor.invalidate();
+    }
     private boolean suppressPointerGesture() {
         return suppressPointerGesture || mouseInput.hasVirtualButton() || touchRevision != mouseInput.revision();
     }
@@ -432,6 +471,7 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         @Override public boolean onTouchEvent(MotionEvent event) { return touch(event); }
         @Override public boolean performClick() { super.performClick(); click(1, 2); return true; }
         @Override protected void onDraw(Canvas canvas) {
+            drawRemoteCursor(canvas);
             int saved=canvas.save();
             canvas.translate(viewport.left()+x*viewport.width(),viewport.top()+y*viewport.height());
             float density=getResources().getDisplayMetrics().density;canvas.scale(density,density);
@@ -441,5 +481,74 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
             paint.setStyle(Paint.Style.FILL);paint.setColor(Color.WHITE);canvas.drawPath(arrow,paint);
             canvas.restoreToCount(saved);
         }
+    }
+
+    /**
+     * The desktop's own pointer. Drawn before the local touch cursor, in the same transformed
+     * picture space, so zoom and pan move it with the image.
+     */
+    private void drawRemoteCursor(Canvas canvas) {
+        if (!remoteCursorReported || !remoteCursorVisible || !remoteCursorPositionValid) return;
+        if (remoteCursorShape == 1) return; // shape "none": the host asked for no pointer
+        float px = viewport.left() + remoteCursorX * viewport.width();
+        float py = viewport.top() + remoteCursorY * viewport.height();
+        float density = getResources().getDisplayMetrics().density;
+        // Visual offset moves the drawn arrow so its hotspot matches the host position.
+        px += remoteCursorOffsetX * viewport.width();
+        py += remoteCursorOffsetY * viewport.height();
+        canvas.save();
+        canvas.translate(px, py);
+        canvas.scale(density, density);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(1.75f);
+        paint.setColor(Color.BLACK);
+        canvas.drawPath(cursorPathFor(remoteCursorShape), paint);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(Color.WHITE);
+        canvas.drawPath(cursorPathFor(remoteCursorShape), paint);
+        canvas.restore();
+    }
+
+    private final Path remoteCursorPath = new Path();
+    private int remoteCursorPathShape = -1;
+    /** Arrow for the common shapes, crosshair/insertion for text, resize arrows otherwise. */
+    private Path cursorPathFor(int shape) {
+        if (remoteCursorPathShape == shape) return remoteCursorPath;
+        remoteCursorPath.rewind();
+        remoteCursorPathShape = shape;
+        switch (shape) {
+            case 7:  // text
+                remoteCursorPath.moveTo(6, 2); remoteCursorPath.lineTo(6, 20);
+                remoteCursorPath.moveTo(2, 3); remoteCursorPath.lineTo(10, 3);
+                remoteCursorPath.moveTo(2, 19); remoteCursorPath.lineTo(10, 19);
+                break;
+            case 6:  // crosshair
+                remoteCursorPath.moveTo(11, 1); remoteCursorPath.lineTo(11, 21);
+                remoteCursorPath.moveTo(1, 11); remoteCursorPath.lineTo(21, 11);
+                break;
+            case 15: case 16: case 26: // col/row/ew resize
+                remoteCursorPath.moveTo(2, 11); remoteCursorPath.lineTo(20, 11);
+                remoteCursorPath.moveTo(6, 7); remoteCursorPath.lineTo(2, 11); remoteCursorPath.lineTo(6, 15);
+                remoteCursorPath.moveTo(16, 7); remoteCursorPath.lineTo(20, 11); remoteCursorPath.lineTo(16, 15);
+                break;
+            case 17: case 19: // ns / vertical resize
+                remoteCursorPath.moveTo(11, 2); remoteCursorPath.lineTo(11, 20);
+                remoteCursorPath.moveTo(7, 6); remoteCursorPath.lineTo(11, 2); remoteCursorPath.lineTo(15, 6);
+                remoteCursorPath.moveTo(7, 16); remoteCursorPath.lineTo(11, 20); remoteCursorPath.lineTo(15, 16);
+                break;
+            case 5:  // wait
+                remoteCursorPath.addCircle(11, 11, 8, Path.Direction.CW);
+                remoteCursorPath.moveTo(11, 11); remoteCursorPath.lineTo(11, 5);
+                remoteCursorPath.moveTo(11, 11); remoteCursorPath.lineTo(15, 13);
+                break;
+            default: // arrow, pointer, and every other shape
+                remoteCursorPath.moveTo(1, 1); remoteCursorPath.lineTo(1, 18);
+                remoteCursorPath.lineTo(5, 14); remoteCursorPath.lineTo(8, 21);
+                remoteCursorPath.lineTo(11, 19.6f); remoteCursorPath.lineTo(8, 12.6f);
+                remoteCursorPath.lineTo(13, 12.2f);
+                remoteCursorPath.close();
+                break;
+        }
+        return remoteCursorPath;
     }
 }

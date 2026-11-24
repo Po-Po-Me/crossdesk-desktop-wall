@@ -46,6 +46,10 @@ final class NativeSession implements AutoCloseable {
         default void previewFrame() { }
         default void previewStream(boolean accepted, long requestId) { }
         default void previewStatus(boolean supported, boolean accepted) { }
+        /** The host's own pointer: visible/shape/position, from a cursor_state sample. */
+        default void remoteCursor(boolean visible, int shape, boolean positionUpdate,
+                                  boolean positionValid, float x, float y,
+                                  float offsetX, float offsetY, int display, long sequence) { }
     }
     // Serializes all peer creation/API calls/destruction, including across activities.
     private static final ExecutorService RTC = Executors.newSingleThreadExecutor(r -> new Thread(r, "CrossDesk RTC"));
@@ -284,6 +288,18 @@ final class NativeSession implements AutoCloseable {
                 else if (type == 9 && signalReady && presenceRequested) {
                     long generation=event.optLong("generation");
                     if(generation==signalGeneration)ui(()->{if(generation==signalGeneration)listener.presence(event);});
+                } else if(type==12){
+                    final boolean visible=event.optBoolean("visible",false);
+                    final int shape=event.optInt("shape",0);
+                    final boolean positionUpdate=event.optBoolean("position_update",false);
+                    final boolean positionValid=event.optBoolean("position_valid",false);
+                    final float cursorX=(float)event.optDouble("x",0.5),cursorY=(float)event.optDouble("y",0.5);
+                    final float offsetX=(float)event.optDouble("visual_offset_x",0);
+                    final float offsetY=(float)event.optDouble("visual_offset_y",0);
+                    final int displayId=event.optInt("display_id",-1);
+                    final long seq=event.optLong("seq",0);
+                    ui(()->listener.remoteCursor(visible,shape,positionUpdate,positionValid,
+                            cursorX,cursorY,offsetX,offsetY,displayId,seq));
                 } else if(type==10){
                     String name=event.getString("name"),path=event.optString("path");
                     double progress=event.getDouble("progress");boolean sending=event.getBoolean("sending");

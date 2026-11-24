@@ -217,6 +217,28 @@ void Data(const char* data, size_t size, const char*, size_t,
       FreeRemoteAction(action);
     }
   }
+  if (name == kMouseStream) {
+    // The host reports its own pointer on the mouse stream. The captured frame usually
+    // excludes it, so Android has to draw it from these samples.
+    RemoteAction action{};
+    if (action.from_json(std::string(data, size)) &&
+        action.type == ControlType::cursor_state) {
+      ctx->owner->Event(12, json{{"seq", action.cs.seq},
+                                 {"visible", action.cs.visible},
+                                 {"shape", static_cast<int>(action.cs.shape)},
+                                 {"position_update", action.cs.position_update},
+                                 {"position_valid", action.cs.position_valid},
+                                 {"x", action.cs.x},
+                                 {"y", action.cs.y},
+                                 {"visual_offset_x", action.cs.visual_offset_x},
+                                 {"visual_offset_y", action.cs.visual_offset_y},
+                                 {"display_id", action.cs.display_id},
+                                 {"render_mode", static_cast<int>(action.cs.render_mode)},
+                                 {"hidden_reason", static_cast<int>(action.cs.hidden_reason)}});
+      FreeRemoteAction(action);
+    }
+    return;
+  }
   if (name == kClipboardStream) ctx->owner->Event(6, data, size);
 }
 void Audio(const char* data, size_t size, const char*, size_t,

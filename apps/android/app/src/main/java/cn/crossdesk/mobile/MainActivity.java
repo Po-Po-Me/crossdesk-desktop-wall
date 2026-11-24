@@ -876,7 +876,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
     private void tapKey(int code){if(session!=null){session.key(code,true);session.key(code,false);}}
     private void shortcut(int code){if(ready&&session!=null)session.chord(code,new int[]{hostPlatform.equals("macos")?0x5B:0x11});}
     private void selectDisplay(){
-        if(!ready)return;int count=Math.min(displays.length(),8);if(count==0){toast(L10n.tr("等待远端屏幕信息"));return;}String[] labels=new String[count];for(int i=0;i<count;i++){JSONObject display=displays.optJSONObject(i);labels[i]=(i+1)+" · "+(display==null?L10n.tr("显示器"):display.optString("name",L10n.tr("显示器")));}new AlertDialog.Builder(this).setTitle(L10n.tr("显示器")).setItems(labels,(d,w)->{if(session!=null){if(w!=selectedDisplay&&video!=null)video.resetViewport();selectedDisplay=w;session.control(4,w);if(controls!=null)controls.displayResolutions(displayResolutions,selectedDisplay);if(controls!=null)controls.resetVideoStatistics();}}).show();
+        if(!ready)return;int count=Math.min(displays.length(),8);if(count==0){toast(L10n.tr("等待远端屏幕信息"));return;}String[] labels=new String[count];for(int i=0;i<count;i++){JSONObject display=displays.optJSONObject(i);labels[i]=(i+1)+" · "+(display==null?L10n.tr("显示器"):display.optString("name",L10n.tr("显示器")));}new AlertDialog.Builder(this).setTitle(L10n.tr("显示器")).setItems(labels,(d,w)->{if(session!=null){if(w!=selectedDisplay&&video!=null)video.resetViewport();selectedDisplay=w;session.control(4,w);if(video!=null)video.remoteCursorDisplay(w);if(controls!=null)controls.displayResolutions(displayResolutions,selectedDisplay);if(controls!=null)controls.resetVideoStatistics();}}).show();
     }
     private void secureAttention(){
         if(!ready||session==null||!hostPlatform.equals("windows"))return;
@@ -1018,6 +1018,13 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         recentPresence.setConnected(foreground&&preferences.getBoolean("networkConsent",false)&&state==1&&!deviceId.isEmpty(),now);
         mainHandler.removeCallbacks(presenceTick);if(recentPresence.isConnected())mainHandler.postDelayed(presenceTick,1000);
         if(preferences.getBoolean("networkConsent",false)){announcementInbox.configure(host,port,deviceId);announcementInbox.setConnected(state==1);}
+    }
+    @Override public void remoteCursor(boolean visible,int shape,boolean positionUpdate,boolean positionValid,
+                                       float x,float y,float offsetX,float offsetY,int display,long sequence){
+        if(video==null)return;
+        // Only the monitor currently streamed carries this pointer.
+        if(positionUpdate&&positionValid&&display>=0&&display!=selectedDisplay)return;
+        video.remoteCursor(visible,shape,positionUpdate,positionValid,x,y,offsetX,offsetY,display,sequence);
     }
     @Override public void presence(JSONObject message){recentPresence.receive(message,android.os.SystemClock.elapsedRealtime());}
     @Override public void status(String value){if(session!=null&&status!=null)status.setText(value);}
