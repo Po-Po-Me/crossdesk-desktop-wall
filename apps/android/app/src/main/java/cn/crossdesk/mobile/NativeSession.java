@@ -491,6 +491,20 @@ final class NativeSession implements AutoCloseable {
         final long request=++videoSettingsRequest;
         execute(()->{if(connected&&!closed)nVideoSettings(handle,quality,frameRate==30?30:60,preference,request);});
     }
+    /**
+     * Wall-only subscription. Purely a preview demand: hosts store it and apply a fixed
+     * per-peer frame gate, so the interactive path must use {@link #restoreInteractiveCadence}.
+     */
+    void wallSubscription(int fps,int width,int height,int quality,int frameRate,int preference){
+        if(closed||!connected)return;
+        previewRequest++;
+        final long requestId=previewRequest;
+        previewPending=true;
+        execute(()->{if(!connected||closed)return;
+            if(!nPreview(handle,fps,width,height,quality,frameRate,preference,requestId))
+                ui(()->{if(requestId==previewRequest){previewPending=false;listener.previewStream(false,requestId);}});
+        });
+    }
     /** Status of the last cadence request, for screens that show a picture without control. */
     boolean streamAccepted(){return previewAccepted;}
     /**

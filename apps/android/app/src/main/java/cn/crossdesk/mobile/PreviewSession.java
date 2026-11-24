@@ -133,7 +133,7 @@ final class PreviewSession implements NativeSession.Listener {
         pending = true;
         paused = value == FPS_PAUSED;
         // Same message the control screen sends; the peer simply never sends input.
-        session.streamMode(value, WALL_WIDTH, WALL_HEIGHT, QUALITY, FRAME_RATE, PREFERENCE);
+        session.wallSubscription(value, WALL_WIDTH, WALL_HEIGHT, QUALITY, FRAME_RATE, PREFERENCE);
     }
 
     private final Runnable ticker = new Runnable() {
