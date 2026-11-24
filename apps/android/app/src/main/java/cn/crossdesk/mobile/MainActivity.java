@@ -655,10 +655,22 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             public void displayResolution(RemoteDisplayResolutions.Mode mode){updateDisplayResolution(mode);}
             public void videoSettings(int field,int value){RemoteVideoSettings.Values old=MainActivity.this.videoSettings.selection;updateVideoSettings(new RemoteVideoSettings.Values(field==0?value:old.quality,field==1?value:old.frameRate,field==2?value:old.preference));}
             public void toggleViewOnly(){setViewOnly(!viewOnlySession);}
+            public void zoomStep(float factor){
+                if(video==null||!viewOnlySession)return;
+                video.zoomBy(factor);
+                if(controls!=null)controls.setZoomFactor(video.zoomScale());
+            }
+            public void zoomReset(){
+                if(video==null)return;
+                video.resetZoom();
+                if(controls!=null)controls.setZoomFactor(video.zoomScale());
+            }
         });controls.setHostPlatform(hostPlatform);controls.setRelative(preferences.getBoolean("relativeMouse",true));controls.setMuted(muted);controls.videoSettings(videoSettings);controls.displayResolutions(displayResolutions,selectedDisplay);root.addView(controls,new LinearLayout.LayoutParams(-1,-1));getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         controls.attachMouseBar(safeArea,safeArea.indexOfChild(root),new VirtualMouseBar(ui,video.mouseInput));
         privacyChanged();
         video.remoteFocusChanged=()->{if(controls!=null)controls.resetKeyboardContext();};
+        // Only the watch-only screen zooms locally; show the factor while it changes.
+        video.viewOnlyFeedback=()->{if(controls!=null)controls.setZoomFactor(video.zoomScale());};
         controls.requestApplyInsets();
         video.addOnLayoutChangeListener((view,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{
             if(!pictureInPictureUi&&!isInPictureInPictureMode())updatePictureInPicture();
@@ -679,7 +691,8 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         session.setInputBlocked(value);
         // Return the stream to an interactive cadence if a wall preview throttled it.
         session.streamMode(60,0,0,videoSettings.selection.quality,30,videoSettings.selection.preference);
-        toast(L10n.tr(value?"仅预览：不会发送任何操作，轻触画面或点击“开始控制”结束":"已开始控制"));
+        if(controls!=null)controls.setZoomFactor(value?video.zoomScale():1f);
+        toast(L10n.tr(value?"仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制":"已开始控制"));
     }
     private void confirmDisconnect(){disconnectDialog=new AlertDialog.Builder(this).setTitle(L10n.tr("断开远程连接？")).setMessage(L10n.tr("断开后将返回首页")).setNegativeButton(L10n.tr("取消"),null).setPositiveButton(L10n.tr("断开连接"),(d,w)->end("")).show();}
     private void end(String reason){
@@ -1051,6 +1064,14 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         cancelVideoSettingsTimeout();
         android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();
         videoSettings=new RemoteVideoSettings(preferences.getInt("videoPreference",1),Math.max(metrics.widthPixels,metrics.heightPixels));
+        // Wall build default: high picture quality at 60 fps until the user changes it.
+        // Wall build default: high picture quality at 60 fps. One-shot migration keeps any
+        // choice the user makes in the settings screen.
+        if(preferences.getInt("videoDefaultsVersion",0)<1){
+            videoSettings.selection=videoSettings.applied=RemoteVideoSettings.preferred(
+                    preferences.getInt("videoPreference",1),Math.max(metrics.widthPixels,metrics.heightPixels));
+            preferences.edit().putInt("videoDefaultsVersion",1).apply();
+        }
     }
     private void updateVideoSettings(RemoteVideoSettings.Values value){
         if(!ready||session==null||!preferences.getBoolean("networkConsent",false))return;

@@ -12095,6 +12095,30 @@
       "fr": "Aucune image reçue",
       "es": "No se recibió imagen",
       "pt-BR": "Nenhuma imagem recebida"
+    },
+    "还原": {
+      "zh-Hans": "还原",
+      "en": "Reset",
+      "ru": "Сброс",
+      "zh-Hant": "還原",
+      "ja": "リセット",
+      "ko": "초기화",
+      "de": "Zurücksetzen",
+      "fr": "Réinitialiser",
+      "es": "Restablecer",
+      "pt-BR": "Redefinir"
+    },
+    "仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制": {
+      "zh-Hans": "仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制",
+      "en": "View only: nothing is sent. Pinch or double-tap to zoom, open the menu to take control.",
+      "ru": "Только просмотр: команды не отправляются. Масштаб — щипком или двойным касанием.",
+      "zh-Hant": "僅預覽：不會傳送任何操作，雙指縮放或雙擊放大，輕觸選單可開始控制。",
+      "ja": "表示のみ：操作は送信されません。ピンチまたはダブルタップで拡大できます。",
+      "ko": "보기 전용: 조작이 전송되지 않습니다. 두 손가락 또는 더블 탭으로 확대하세요.",
+      "de": "Nur ansehen: Es werden keine Eingaben gesendet. Zoomen per Pinch oder Doppeltippen.",
+      "fr": "Affichage seul : aucune commande envoyée. Pincez ou double-tapez pour zoomer.",
+      "es": "Solo ver: no se envía nada. Usa pellizco o doble toque para ampliar.",
+      "pt-BR": "Apenas ver: nada é enviado. Use pinça ou toque duplo para ampliar."
     }
   },
   "desktop": {
@@ -13575,7 +13599,9 @@
       "仅预览：不会发送任何操作，轻触画面或点击“开始控制”结束",
       "已开始控制",
       "仅预览，轻触开始控制",
-      "没有收到画面"
+      "没有收到画面",
+      "还原",
+      "仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制"
     ],
     "ios": [
       "%1$@ 传输失败",

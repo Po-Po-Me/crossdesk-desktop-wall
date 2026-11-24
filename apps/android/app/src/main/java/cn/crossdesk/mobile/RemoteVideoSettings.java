@@ -29,6 +29,17 @@ final class RemoteVideoSettings {
         // All quality/frame-rate choices remain available for manual adjustment.
         selection=applied=new Values(displayLongEdge>0&&displayLongEdge<=1280?0:1,30,preference>=0&&preference<=2?preference:1);
     }
+    /**
+     * Wall builds start with the highest picture quality and 60 fps capture so the very first
+     * frame is already sharp and smooth; the host still lowers these under real pressure.
+     * {@code displayLongEdge} only decides the fallback when 60 fps is unavailable.
+     */
+    static Values preferred(int preference, int displayLongEdge) {
+        // High quality, 60 fps capture, and the preference that protects sharpness at that
+        // frame rate (画质优先 = index 1) unless the user already chose another preference.
+        int chosen = preference >= 0 && preference <= 2 ? preference : 1;
+        return new Values(2, 60, chosen);
+    }
     void setSupported(boolean value){supported=value;if(!value){selection=applied;pending=false;failed=false;}}
     long begin(Values value){
         if(!supported||!value.valid())return -1;

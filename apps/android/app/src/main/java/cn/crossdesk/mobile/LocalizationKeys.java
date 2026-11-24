@@ -413,6 +413,8 @@ final class LocalizationKeys {
         IDS.put("已开始控制", R.string.text_1f2ad5e82ea129d4);
         IDS.put("仅预览，轻触开始控制", R.string.text_06a6c3dbd066334d);
         IDS.put("没有收到画面", R.string.text_568688e2090e14ea);
+        IDS.put("还原", R.string.text_ddde08946298195d);
+        IDS.put("仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制", R.string.text_aca32b4e2f6407af);
     }
     private LocalizationKeys() {}
 }

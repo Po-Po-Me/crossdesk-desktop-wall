@@ -407,4 +407,6 @@
     <string name="text_1f2ad5e82ea129d4" formatted="false">"Contrôle activé"</string>
     <string name="text_06a6c3dbd066334d" formatted="false">"Affichage seul, touchez pour contrôler"</string>
     <string name="text_568688e2090e14ea" formatted="false">"Aucune image reçue"</string>
+    <string name="text_ddde08946298195d" formatted="false">"Réinitialiser"</string>
+    <string name="text_aca32b4e2f6407af" formatted="false">"Affichage seul : aucune commande envoyée. Pincez ou double-tapez pour zoomer."</string>
 </resources>

@@ -407,4 +407,6 @@
     <string name="text_1f2ad5e82ea129d4" formatted="false">"已开始控制"</string>
     <string name="text_06a6c3dbd066334d" formatted="false">"仅预览，轻触开始控制"</string>
     <string name="text_568688e2090e14ea" formatted="false">"没有收到画面"</string>
+    <string name="text_ddde08946298195d" formatted="false">"还原"</string>
+    <string name="text_aca32b4e2f6407af" formatted="false">"仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制"</string>
 </resources>

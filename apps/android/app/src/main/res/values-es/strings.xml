@@ -407,4 +407,6 @@
     <string name="text_1f2ad5e82ea129d4" formatted="false">"Control activado"</string>
     <string name="text_06a6c3dbd066334d" formatted="false">"Solo ver, toca para controlar"</string>
     <string name="text_568688e2090e14ea" formatted="false">"No se recibió imagen"</string>
+    <string name="text_ddde08946298195d" formatted="false">"Restablecer"</string>
+    <string name="text_aca32b4e2f6407af" formatted="false">"Solo ver: no se envía nada. Usa pellizco o doble toque para ampliar."</string>
 </resources>

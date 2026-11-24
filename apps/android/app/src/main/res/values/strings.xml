@@ -407,4 +407,6 @@
     <string name="text_1f2ad5e82ea129d4" formatted="false">"Control enabled"</string>
     <string name="text_06a6c3dbd066334d" formatted="false">"View only, tap to take control"</string>
     <string name="text_568688e2090e14ea" formatted="false">"No picture received"</string>
+    <string name="text_ddde08946298195d" formatted="false">"Reset"</string>
+    <string name="text_aca32b4e2f6407af" formatted="false">"View only: nothing is sent. Pinch or double-tap to zoom, open the menu to take control."</string>
 </resources>

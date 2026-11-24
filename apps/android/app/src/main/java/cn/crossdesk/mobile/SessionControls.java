@@ -20,6 +20,9 @@ final class SessionControls extends FrameLayout {
         default void togglePrivacy() { }
         /** Show the desktop without sending input until the user takes control. */
         default void toggleViewOnly() { }
+        /** Local zoom of the received picture (watch-only); never reaches the desktop. */
+        default void zoomStep(float factor) { }
+        default void zoomReset() { }
     }
     private final MobileUi ui;
     private final Actions actions;
@@ -50,6 +53,8 @@ final class SessionControls extends FrameLayout {
     private View privacyButton;
     private MobileUi.Icon privacyIcon;
     private TextView privacyFeedback,privacyCaption;
+    private View zoomChip, zoomOut, zoomIn, zoomReset;
+    private TextView zoomLabel;
     private TextView transferLabel,saveFileButton;
     private String transferStatus="";
     private boolean hasReceivedFile;
@@ -77,6 +82,17 @@ final class SessionControls extends FrameLayout {
         ((FrameLayout)orb).removeAllViews();((FrameLayout)orb).addView(brand,new LayoutParams(ui.dp(46),ui.dp(46),Gravity.CENTER));
         orb.setBackground(ui.background(0xFFF5F5F7,27));orb.setElevation(ui.dp(7));addView(orb,new LayoutParams(ui.dp(54),ui.dp(54)));
         drag(orb,orb,()->{if(menu==null)openMenu("controls");else closeMenu();});
+        zoomChip=ui.row();zoomChip.setPadding(ui.dp(6),0,ui.dp(6),0);
+        zoomChip.setBackground(ui.background(0xE6202024,20));zoomChip.setElevation(ui.dp(6));
+        zoomOut=ui.action("−",Color.WHITE,()->actions.zoomStep(1/1.5f));zoomOut.setTextSize(20);zoomOut.setMinHeight(ui.dp(34));
+        zoomLabel=ui.text("1.0×",13,false);zoomLabel.setTextColor(Color.WHITE);zoomLabel.setGravity(Gravity.CENTER);zoomLabel.setMinWidth(ui.dp(46));
+        zoomIn=ui.action("+",Color.WHITE,()->actions.zoomStep(1.5f));zoomIn.setTextSize(20);zoomIn.setMinHeight(ui.dp(34));
+        zoomReset=ui.action(L10n.tr("还原"),Color.WHITE,actions::zoomReset);zoomReset.setTextSize(12);zoomReset.setMinHeight(ui.dp(34));
+        zoomChip.addView(zoomOut,ui.size(34,34));zoomChip.addView(zoomLabel,ui.size(50,34));
+        zoomChip.addView(zoomIn,ui.size(34,34));zoomChip.addView(zoomReset,ui.size(-2,34));
+        zoomChip.setClickable(true);
+        zoomChip.setVisibility(GONE);
+        addView(zoomChip,new LayoutParams(-2,ui.dp(34)));
     }
     void setRelative(boolean value){relative=value;if(menu!=null&&menuPage.equals("controls"))openMenu("controls");}
     void setHostPlatform(String platform){
@@ -99,11 +115,32 @@ final class SessionControls extends FrameLayout {
         if(value){cancelMouseInput();closeMenu();closeKeyboard();}
         setVisibility(value?GONE:VISIBLE);positionMouse();
     }
+    /** Show the current local zoom, e.g. "1.5×", while the screen is watch-only. */
+    void setZoomFactor(float scale) {
+        if (zoomLabel != null) zoomLabel.setText(String.format(java.util.Locale.ROOT, "%.1f×", scale));
+        if (zoomChip != null) {
+            zoomChip.setVisibility(viewOnly && !pictureInPicture ? VISIBLE : GONE);
+            positionZoom();
+        }
+    }
+    private void positionZoom() {
+        if (zoomChip == null || zoomChip.getVisibility() != VISIBLE) return;
+        int w = getWidth(), h = getHeight();
+        if (w == 0 || h == 0) return;
+        float chipW = ui.dp(34 * 3 + 50 + 12), chipH = ui.dp(34);
+        float x = Float.isNaN(mouseX) ? w - chipW - ui.dp(16) : mouseX;
+        float y = Float.isNaN(mouseY) ? h - chipH - ui.dp(24) : mouseY;
+        float maxY = h - chipH - ui.dp(8);
+        y = Math.max(ui.dp(8), Math.min(maxY, y));
+        x = Math.max(ui.dp(8), Math.min(w - chipW - ui.dp(8), x));
+        zoomChip.setTranslationX(x);
+        zoomChip.setTranslationY(y);
+    }
     private void toggleMouse(){cancelMouseInput();mouseVisible=!mouseVisible;closeMenu();positionMouse();}
     private void positionMouse(){
         if(mouseBar==null)return;
         boolean visible=!pictureInPicture&&!viewOnly&&mouseVisible&&waiting.getVisibility()==GONE;
-        if(!visible){if(mouseBar.getVisibility()==VISIBLE)cancelMouseInput();mouseBar.setVisibility(GONE);return;}
+        if(!visible){if(mouseBar.getVisibility()==VISIBLE)cancelMouseInput();mouseBar.setVisibility(GONE);positionZoom();return;}
         float width=ui.dp(VirtualMouseBar.WIDTH_DP),height=ui.dp(VirtualMouseBar.HEIGHT_DP),gap=ui.dp(6),margin=ui.dp(8);
         float x = Float.isNaN(mouseX) ? getWidth() - width - ui.dp(16) : mouseX;
         float y = Float.isNaN(mouseY) ? getHeight() - height - ui.dp(24) : mouseY;
@@ -422,6 +459,10 @@ final class SessionControls extends FrameLayout {
     }
     @Override protected void onAttachedToWindow(){super.onAttachedToWindow();if(android.os.Build.VERSION.SDK_INT<30)getViewTreeObserver().addOnGlobalLayoutListener(legacyKeyboardLayout);}
     @Override protected void onDetachedFromWindow(){getViewTreeObserver().removeOnGlobalLayoutListener(legacyKeyboardLayout);cancelMouseInput();super.onDetachedFromWindow();}
-    @Override protected void onSizeChanged(int width,int height,int oldWidth,int oldHeight){super.onSizeChanged(width,height,oldWidth,oldHeight);post(this::constrainPanels);}
+    @Override protected void onSizeChanged(int width,int height,int oldWidth,int oldHeight){
+        super.onSizeChanged(width,height,oldWidth,oldHeight);
+        post(this::constrainPanels);
+        positionZoom();
+    }
     private static float bound(float value,float min,float max){return Math.max(min,Math.min(value,Math.max(min,max)));}
 }

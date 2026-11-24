@@ -407,4 +407,6 @@
     <string name="text_1f2ad5e82ea129d4" formatted="false">"Controle ativado"</string>
     <string name="text_06a6c3dbd066334d" formatted="false">"Apenas ver, toque para controlar"</string>
     <string name="text_568688e2090e14ea" formatted="false">"Nenhuma imagem recebida"</string>
+    <string name="text_ddde08946298195d" formatted="false">"Redefinir"</string>
+    <string name="text_aca32b4e2f6407af" formatted="false">"Apenas ver: nada é enviado. Use pinça ou toque duplo para ampliar."</string>
 </resources>

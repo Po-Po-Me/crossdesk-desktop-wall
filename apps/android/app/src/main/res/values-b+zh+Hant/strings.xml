@@ -407,4 +407,6 @@
     <string name="text_1f2ad5e82ea129d4" formatted="false">"已開始控制"</string>
     <string name="text_06a6c3dbd066334d" formatted="false">"僅預覽，輕觸開始控制"</string>
     <string name="text_568688e2090e14ea" formatted="false">"沒有收到畫面"</string>
+    <string name="text_ddde08946298195d" formatted="false">"還原"</string>
+    <string name="text_aca32b4e2f6407af" formatted="false">"僅預覽：不會傳送任何操作，雙指縮放或雙擊放大，輕觸選單可開始控制。"</string>
 </resources>

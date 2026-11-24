@@ -407,4 +407,6 @@
     <string name="text_1f2ad5e82ea129d4" formatted="false">"Steuerung aktiv"</string>
     <string name="text_06a6c3dbd066334d" formatted="false">"Nur ansehen, tippen zum Steuern"</string>
     <string name="text_568688e2090e14ea" formatted="false">"Kein Bild empfangen"</string>
+    <string name="text_ddde08946298195d" formatted="false">"Zurücksetzen"</string>
+    <string name="text_aca32b4e2f6407af" formatted="false">"Nur ansehen: Es werden keine Eingaben gesendet. Zoomen per Pinch oder Doppeltippen."</string>
 </resources>

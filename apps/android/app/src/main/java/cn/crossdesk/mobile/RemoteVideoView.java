@@ -38,6 +38,20 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     private long touchRevision;
     private boolean suppressPointerGesture;
     private boolean viewOnly;
+    private long viewOnlyDownAt, viewOnlyLastTap;
+    private float viewOnlyDownX, viewOnlyDownY;
+    /** Notified when the local zoom changes so the screen can show the current factor. */
+    Runnable viewOnlyFeedback = () -> { };
+    /** Current local zoom, for the screen to show a factor such as "2.0×". */
+    float zoomScale() { return viewport.scale(); }
+    void resetZoom() { viewport.reset(); applyViewport(); }
+    /** Zoom around the centre of the picture; used by the on-screen +/- buttons. */
+    void zoomBy(float factor) {
+        if (!viewOnly || factor <= 0 || !Float.isFinite(factor)) return;
+        float cx = getWidth() / 2f, cy = getHeight() / 2f;
+        viewport.zoomBy(factor, cx, cy);
+        applyViewport();
+    }
     void setRelative(boolean value) { releaseMouse(); relative=value; }
     void setPictureInPicture(boolean value) {
         if(pictureInPicture==value)return;
@@ -136,6 +150,7 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         cursor.invalidate();
     }
     private void sendMouse(float x, float y, int flag, int wheel) {
+        if (viewOnly) return;
         this.x = x; this.y = y;
         if((flag==1||flag==3||flag==5)&&remoteFocusChanged!=null)remoteFocusChanged.run();
         session.pointer(x,y,flag,wheel);
@@ -181,6 +196,8 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     private void click(int down, int up) { mouseInput.click(down,up); }
     private boolean touch(MotionEvent e) {
         int action = e.getActionMasked();
+        // View only: the image can still be zoomed and panned locally, but nothing is sent.
+        if (viewOnly) return touchViewOnly(e, action);
         if (action == MotionEvent.ACTION_DOWN) {
             twoFinger = pinching = viewportPanActive = false;
             touchRevision = mouseInput.revision();
@@ -209,6 +226,122 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         }
         return true;
     }
+
+    /**
+     * Watch-only touch: pinch to zoom, one finger to pan while zoomed, double tap to zoom in
+     * and out. No pointer, wheel or click message leaves this view.
+     */
+    private boolean touchViewOnly(MotionEvent e, int action) {
+        if (action == MotionEvent.ACTION_DOWN) {
+            twoFinger = false;
+            pinching = false;
+            viewportPanActive = viewport.isZoomed();
+            lastX = e.getX();
+            lastY = e.getY();
+            viewOnlyDownAt = SystemClock.elapsedRealtime();
+            viewOnlyDownX = lastX;
+            viewOnlyDownY = lastY;
+            return true;
+        }
+        if (action == MotionEvent.ACTION_POINTER_DOWN) {
+            twoFinger = true;
+            viewportPanActive = false;
+            startPinch(e);
+            return true;
+        }
+        if (action == MotionEvent.ACTION_MOVE) {
+            if (e.getPointerCount() >= 2) movePinch(e);
+            else if (viewport.isZoomed()) panViewOnly(e);
+            return true;
+        }
+        if (action == MotionEvent.ACTION_POINTER_UP) {
+            // Keep the remaining finger as the new anchor instead of jumping.
+            twoFinger = false;
+            pinching = false;
+            startPinch(e, e.getActionIndex());
+            return true;
+        }
+        if (action == MotionEvent.ACTION_UP) {
+            boolean tap = !pinching && SystemClock.elapsedRealtime() - viewOnlyDownAt < 260
+                    && Math.hypot(e.getX() - viewOnlyDownX, e.getY() - viewOnlyDownY) < pinchSlop * 3;
+            if (tap) handleViewOnlyTap(e.getX(), e.getY());
+            twoFinger = false;
+            pinching = false;
+            viewport.finishGesture();
+            applyViewport();
+            return true;
+        }
+        if (action == MotionEvent.ACTION_CANCEL) {
+            twoFinger = false;
+            pinching = false;
+            viewport.finishGesture();
+            applyViewport();
+            return true;
+        }
+        return true;
+    }
+
+    private float pinchStartSpan;
+    private void startPinch(MotionEvent e) { startPinch(e, -1); }
+    private void startPinch(MotionEvent e, int skipIndex) {
+        float[] focus = focus(e, skipIndex);
+        pinchStartSpan = Math.max(pinchSlop, span(e, focus[0], focus[1], skipIndex));
+        twoFingerX = focus[0];
+        twoFingerY = focus[1];
+    }
+    private void movePinch(MotionEvent e) {
+        if (pinchStartSpan <= 0) startPinch(e);
+        float[] focus = focus(e, -1);
+        float span = Math.max(pinchSlop, span(e, focus[0], focus[1], -1));
+        if (Math.abs(span - pinchStartSpan) >= pinchSlop) pinching = true;
+        if (pinching) {
+            viewport.zoomBy(span / pinchStartSpan, twoFingerX, twoFingerY);
+            pinchStartSpan = span;
+            if (viewport.isZoomed()) viewport.panBy(focus[0] - twoFingerX, focus[1] - twoFingerY);
+            twoFingerX = focus[0];
+            twoFingerY = focus[1];
+            applyViewport();
+            viewOnlyFeedback.run();
+        }
+    }
+    private void panViewOnly(MotionEvent e) {
+        float dx = e.getX() - lastX, dy = e.getY() - lastY;
+        if (dx == 0 && dy == 0) return;
+        lastX = e.getX();
+        lastY = e.getY();
+        viewport.panBy(dx, dy);
+        applyViewport();
+    }
+    private void handleViewOnlyTap(float x, float y) {
+        long now = SystemClock.elapsedRealtime();
+        if (now - viewOnlyLastTap < 300) {
+            viewOnlyLastTap = 0;
+            // Double tap: toggle between fit and 2x around the tapped point.
+            if (viewport.isZoomed()) viewport.reset(); else viewport.zoomBy(2f, x, y);
+            applyViewport();
+            viewOnlyFeedback.run();
+        } else {
+            viewOnlyLastTap = now;
+        }
+    }
+    private static float[] focus(MotionEvent e, int skip) {
+        float x = 0, y = 0; int count = 0;
+        for (int i = 0; i < e.getPointerCount(); i++) {
+            if (i == skip) continue;
+            x += e.getX(i); y += e.getY(i); count++;
+        }
+        return count == 0 ? new float[]{0, 0} : new float[]{x / count, y / count};
+    }
+    private static float span(MotionEvent e, float focusX, float focusY, int skip) {
+        float sum = 0; int count = 0;
+        for (int i = 0; i < e.getPointerCount(); i++) {
+            if (i == skip) continue;
+            sum += (float) Math.hypot(e.getX(i) - focusX, e.getY(i) - focusY);
+            count++;
+        }
+        return count == 0 ? 0 : 2 * sum / count;
+    }
+
     private void updateTwoFingers(MotionEvent event) {
         int action = event.getActionMasked();
         int lifted = action == MotionEvent.ACTION_POINTER_UP ? event.getActionIndex() : -1;
