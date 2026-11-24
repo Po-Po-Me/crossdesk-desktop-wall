@@ -401,4 +401,10 @@
     <string name="text_90e28b54e030bd66" formatted="false">"正在重新連線…"</string>
     <string name="text_899e00ee93fae007" formatted="false">"預覽暫時無法使用"</string>
     <string name="text_65b5f2031f9225bd" formatted="false">"正在切換顯示器"</string>
+    <string name="text_3bfe24e4e79d1913" formatted="false">"僅預覽"</string>
+    <string name="text_188ac2522e79cbeb" formatted="false">"開始控制"</string>
+    <string name="text_60d70311fe19e7e6" formatted="false">"僅預覽：不會傳送任何操作，輕觸選單即可開始控制。"</string>
+    <string name="text_1f2ad5e82ea129d4" formatted="false">"已開始控制"</string>
+    <string name="text_06a6c3dbd066334d" formatted="false">"僅預覽，輕觸開始控制"</string>
+    <string name="text_568688e2090e14ea" formatted="false">"沒有收到畫面"</string>
 </resources>

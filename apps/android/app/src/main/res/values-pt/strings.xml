@@ -401,4 +401,10 @@
     <string name="text_90e28b54e030bd66" formatted="false">"Reconectando…"</string>
     <string name="text_899e00ee93fae007" formatted="false">"Visualização indisponível"</string>
     <string name="text_65b5f2031f9225bd" formatted="false">"Trocando monitor"</string>
+    <string name="text_3bfe24e4e79d1913" formatted="false">"Apenas ver"</string>
+    <string name="text_188ac2522e79cbeb" formatted="false">"Controlar"</string>
+    <string name="text_60d70311fe19e7e6" formatted="false">"Apenas ver: nada é enviado. Use o menu para controlar."</string>
+    <string name="text_1f2ad5e82ea129d4" formatted="false">"Controle ativado"</string>
+    <string name="text_06a6c3dbd066334d" formatted="false">"Apenas ver, toque para controlar"</string>
+    <string name="text_568688e2090e14ea" formatted="false">"Nenhuma imagem recebida"</string>
 </resources>

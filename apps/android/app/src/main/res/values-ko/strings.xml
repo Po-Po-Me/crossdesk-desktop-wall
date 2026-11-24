@@ -401,4 +401,10 @@
     <string name="text_90e28b54e030bd66" formatted="false">"다시 연결 중…"</string>
     <string name="text_899e00ee93fae007" formatted="false">"미리보기를 사용할 수 없음"</string>
     <string name="text_65b5f2031f9225bd" formatted="false">"디스플레이 전환 중"</string>
+    <string name="text_3bfe24e4e79d1913" formatted="false">"보기 전용"</string>
+    <string name="text_188ac2522e79cbeb" formatted="false">"제어 시작"</string>
+    <string name="text_60d70311fe19e7e6" formatted="false">"보기 전용: 조작이 전송되지 않습니다. 메뉴에서 제어를 시작하세요."</string>
+    <string name="text_1f2ad5e82ea129d4" formatted="false">"제어가 시작되었습니다"</string>
+    <string name="text_06a6c3dbd066334d" formatted="false">"보기 전용, 탭하여 제어"</string>
+    <string name="text_568688e2090e14ea" formatted="false">"화면을 받지 못했습니다"</string>
 </resources>

@@ -407,6 +407,12 @@ final class LocalizationKeys {
         IDS.put("正在重新连接…", R.string.text_90e28b54e030bd66);
         IDS.put("预览暂不可用", R.string.text_899e00ee93fae007);
         IDS.put("正在切换显示器", R.string.text_65b5f2031f9225bd);
+        IDS.put("仅预览", R.string.text_3bfe24e4e79d1913);
+        IDS.put("开始控制", R.string.text_188ac2522e79cbeb);
+        IDS.put("仅预览：不会发送任何操作，轻触画面或点击“开始控制”结束", R.string.text_60d70311fe19e7e6);
+        IDS.put("已开始控制", R.string.text_1f2ad5e82ea129d4);
+        IDS.put("仅预览，轻触开始控制", R.string.text_06a6c3dbd066334d);
+        IDS.put("没有收到画面", R.string.text_568688e2090e14ea);
     }
     private LocalizationKeys() {}
 }

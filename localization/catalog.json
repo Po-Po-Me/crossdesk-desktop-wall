@@ -12023,6 +12023,78 @@
       "fr": "Changement d'écran",
       "es": "Cambiando de pantalla",
       "pt-BR": "Trocando monitor"
+    },
+    "仅预览": {
+      "zh-Hans": "仅预览",
+      "en": "View only",
+      "ru": "Только просмотр",
+      "zh-Hant": "僅預覽",
+      "ja": "表示のみ",
+      "ko": "보기 전용",
+      "de": "Nur ansehen",
+      "fr": "Affichage seul",
+      "es": "Solo ver",
+      "pt-BR": "Apenas ver"
+    },
+    "开始控制": {
+      "zh-Hans": "开始控制",
+      "en": "Take control",
+      "ru": "Управлять",
+      "zh-Hant": "開始控制",
+      "ja": "操作する",
+      "ko": "제어 시작",
+      "de": "Steuern",
+      "fr": "Contrôler",
+      "es": "Controlar",
+      "pt-BR": "Controlar"
+    },
+    "仅预览：不会发送任何操作，轻触画面或点击“开始控制”结束": {
+      "zh-Hans": "仅预览：不会发送任何操作，轻触画面或点击“开始控制”结束",
+      "en": "View only: nothing is sent to the desktop. Tap the menu to take control.",
+      "ru": "Только просмотр: команды не отправляются. Коснитесь меню, чтобы управлять.",
+      "zh-Hant": "僅預覽：不會傳送任何操作，輕觸選單即可開始控制。",
+      "ja": "表示のみ：操作は送信されません。メニューから操作を開始できます。",
+      "ko": "보기 전용: 조작이 전송되지 않습니다. 메뉴에서 제어를 시작하세요.",
+      "de": "Nur ansehen: Es werden keine Eingaben gesendet. Über das Menü steuern.",
+      "fr": "Affichage seul : aucune commande n'est envoyée. Passez par le menu pour contrôler.",
+      "es": "Solo ver: no se envía nada. Usa el menú para controlar.",
+      "pt-BR": "Apenas ver: nada é enviado. Use o menu para controlar."
+    },
+    "已开始控制": {
+      "zh-Hans": "已开始控制",
+      "en": "Control enabled",
+      "ru": "Управление включено",
+      "zh-Hant": "已開始控制",
+      "ja": "操作を開始しました",
+      "ko": "제어가 시작되었습니다",
+      "de": "Steuerung aktiv",
+      "fr": "Contrôle activé",
+      "es": "Control activado",
+      "pt-BR": "Controle ativado"
+    },
+    "仅预览，轻触开始控制": {
+      "zh-Hans": "仅预览，轻触开始控制",
+      "en": "View only, tap to take control",
+      "ru": "Только просмотр, коснитесь для управления",
+      "zh-Hant": "僅預覽，輕觸開始控制",
+      "ja": "表示のみ、タップで操作",
+      "ko": "보기 전용, 탭하여 제어",
+      "de": "Nur ansehen, tippen zum Steuern",
+      "fr": "Affichage seul, touchez pour contrôler",
+      "es": "Solo ver, toca para controlar",
+      "pt-BR": "Apenas ver, toque para controlar"
+    },
+    "没有收到画面": {
+      "zh-Hans": "没有收到画面",
+      "en": "No picture received",
+      "ru": "Изображение не получено",
+      "zh-Hant": "沒有收到畫面",
+      "ja": "画面を受信できません",
+      "ko": "화면을 받지 못했습니다",
+      "de": "Kein Bild empfangen",
+      "fr": "Aucune image reçue",
+      "es": "No se recibió imagen",
+      "pt-BR": "Nenhuma imagem recebida"
     }
   },
   "desktop": {
@@ -13497,7 +13569,13 @@
       "正在获取画面",
       "正在重新连接…",
       "预览暂不可用",
-      "正在切换显示器"
+      "正在切换显示器",
+      "仅预览",
+      "开始控制",
+      "仅预览：不会发送任何操作，轻触画面或点击“开始控制”结束",
+      "已开始控制",
+      "仅预览，轻触开始控制",
+      "没有收到画面"
     ],
     "ios": [
       "%1$@ 传输失败",

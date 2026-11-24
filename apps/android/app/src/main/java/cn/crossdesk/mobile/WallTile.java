@@ -100,6 +100,13 @@ final class WallTile extends FrameLayout {
     }
 
     /** Picture area inside the card, in this view's coordinates (above the caption strip). */
+    /** The picture window in screen coordinates, used to place the shared stream surface. */
+    void pictureRect(Rect out) {
+        int[] location = new int[2];
+        picture.getLocationOnScreen(location);
+        out.set(location[0], location[1], location[0] + picture.getWidth(), location[1] + picture.getHeight());
+    }
+
     void streamBounds(Rect out) {
         int[] tileLocation = new int[2], pictureLocation = new int[2];
         getLocationOnScreen(tileLocation);

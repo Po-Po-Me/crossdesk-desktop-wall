@@ -18,10 +18,14 @@ final class PreviewSession implements NativeSession.Listener {
     }
 
     static final int STATE_CONNECTING = 0, STATE_CONNECTED = 1, STATE_FAILED = 2;
-    static final int FPS_PAUSED = 0, FPS_WALL = 1, FPS_REMOTE = 15;
-    private static final long WALL_BUDGET_MS = 260, REMOTE_BUDGET_MS = 2000;
+    /**
+     * The wall always streams at a normal interactive cadence and only uses the on-screen
+     * flag to decide when to pause. Reduced preview tiers (1/8/15) are refused by hosts that
+     * hold a shared-screen lease, and a refused request left a tile frozen forever.
+     */
+    static final int FPS_PAUSED = 0, FPS_WALL = 30;
     private static final int QUALITY = 1, FRAME_RATE = 30, PREFERENCE = 1;
-    private static final int WALL_WIDTH = 1440, WALL_HEIGHT = 810;
+    private static final int WALL_WIDTH = 1280, WALL_HEIGHT = 720;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final String host;
@@ -36,7 +40,7 @@ final class PreviewSession implements NativeSession.Listener {
     private int fps = FPS_PAUSED;
     private long request;
     private boolean accepted, pending, paused;
-    private long lastKeyframe, throttleGrace;
+    private long lastKeyframe;
     volatile Runnable onFrame;
     /** The wall tells the session whether its picture is the one on screen. */
     volatile boolean isStreaming;
@@ -115,30 +119,17 @@ final class PreviewSession implements NativeSession.Listener {
 
     private void refresh() {
         if (session == null || !connected || handedOff) return;
-        if (pending) return;
-        if (fps == FPS_PAUSED) {
-            // One pause is enough; hosts apply it to this controller only.
-            if (accepted && !paused) { paused = true; subscribe(FPS_PAUSED); }
-            return;
-        }
-        paused = false;
-        // A host without preview support keeps its own cadence; the tile still gets video.
-        if (!accepted) return;
-        long now = SystemClock.elapsedRealtime();
-        long sinceFrame = lastKeyframe == 0 ? Long.MAX_VALUE : now - lastKeyframe;
-        if (fps == FPS_WALL) {
-            if (sinceFrame >= WALL_BUDGET_MS + 3000 && now - throttleGrace >= 4000) subscribe(FPS_WALL);
-            return;
-        }
-        if (sinceFrame >= REMOTE_BUDGET_MS) subscribe(FPS_REMOTE);
+        if (pending || paused == (fps == FPS_PAUSED)) return;
+        subscribe(fps);
     }
 
     private void subscribe(int value) {
         if (session == null || !connected || handedOff) return;
         request++;
         pending = true;
-        throttleGrace = SystemClock.elapsedRealtime();
-        session.previewStream(value, WALL_WIDTH, WALL_HEIGHT, QUALITY, FRAME_RATE, PREFERENCE);
+        paused = value == FPS_PAUSED;
+        // Same message the control screen sends; the peer simply never sends input.
+        session.streamMode(value, WALL_WIDTH, WALL_HEIGHT, QUALITY, FRAME_RATE, PREFERENCE);
     }
 
     private final Runnable ticker = new Runnable() {
@@ -168,6 +159,7 @@ final class PreviewSession implements NativeSession.Listener {
     }
 
     @Override public void videoSize(int width, int height) { lastKeyframe = SystemClock.elapsedRealtime(); }
+    long lastFrame() { return lastKeyframe; }
 
     @Override public void previewFrame() {
         if (handedOff) return;
@@ -202,6 +194,8 @@ final class PreviewSession implements NativeSession.Listener {
         if (requestId != request) return;
         pending = false;
         accepted = value;
+        // A refused request must not leave the host paused; ask again at the same cadence.
+        if (!value && !paused) main.postDelayed(this::refresh, 2500);
     }
 
     @Override public void previewStatus(boolean supported, boolean value) {

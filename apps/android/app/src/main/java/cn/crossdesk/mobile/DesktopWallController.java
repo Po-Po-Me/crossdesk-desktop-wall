@@ -28,7 +28,8 @@ final class DesktopWallController {
         void wallMessage(String message);
     }
 
-    static final long DWELL_MS = 4200, SETTLE_MS = 900, VISIBLE_MS = 1200, CONTROL_GRACE_MS = 8000;
+    static final long DWELL_MS = 4200, SETTLE_MS = 900, VISIBLE_MS = 1200, CONTROL_GRACE_MS = 8000,
+            FIRST_FRAME_TIMEOUT_MS = 7000;
     private static final int MAX_DESKTOPS = 16;
 
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -40,6 +41,7 @@ final class DesktopWallController {
     private final List<WallTile> tiles = new ArrayList<>();
     private final Map<String, Bitmap> stills = new HashMap<>();
     private volatile TextureView streamHost;
+    private long lastBindCheck;
     private MirrorTexture mirror;
     private Entry streaming;
     private boolean visible, paused;
@@ -55,7 +57,7 @@ final class DesktopWallController {
         int state = WallTile.STATE_IDLE;
         String detail = "";
         long visibleSince, lastActive, lastKeyframe;
-        int failures, index;
+        int failures, retries, index;
         void tileState(int value, String text) {
             state = value;
             detail = text == null ? "" : text;
@@ -145,29 +147,27 @@ final class DesktopWallController {
         }
     }
 
-    /** Keep the shared surface exactly on the tile that owns the stream. */
+    /** Keep the shared surface exactly on the picture area of the tile that owns the stream. */
     private void trackTile() {
         TextureView host = streamHost;
         Entry current = streaming;
         if (host == null || current == null || current.tile == null) return;
         WallTile tile = current.tile;
-        if (tile.getWidth() <= 0 || tile.getHeight() <= 0) { host.postDelayed(this::trackTile, 120); return; }
-        int[] tileLocation = new int[2];
-        tile.getLocationOnScreen(tileLocation);
+        if (tile.getWidth() <= 0 || tile.getHeight() <= 0) { host.postDelayed(this::trackTile, 200); return; }
+        if (tile.getWindowToken() == null || !tile.isAttachedToWindow()) { host.postDelayed(this::trackTile, 200); return; }
+        Rect picture = new Rect();
+        tile.pictureRect(picture);
         int[] hostLocation = new int[2];
         host.getLocationOnScreen(hostLocation);
-        Rect picture = new Rect();
-        tile.streamBounds(picture);
-        host.setTranslationX(tileLocation[0] - hostLocation[0] + picture.left);
-        host.setTranslationY(tileLocation[1] - hostLocation[1] + picture.top);
+        host.setTranslationX(picture.left - hostLocation[0]);
+        host.setTranslationY(picture.top - hostLocation[1]);
         android.view.ViewGroup.LayoutParams params = host.getLayoutParams();
-        // Size the surface to the picture area so the caption strip is never covered.
-        int width = picture.width(), height = picture.height();
-        if (params.width != width || params.height != height) {
-            params.width = width;
-            params.height = height;
+        if (params.width != picture.width() || params.height != picture.height()) {
+            params.width = picture.width();
+            params.height = picture.height();
             host.setLayoutParams(params);
         }
+        host.setVisibility(picture.width() > 0 ? android.view.View.VISIBLE : android.view.View.GONE);
         host.postDelayed(this::trackTile, 120);
     }
 
@@ -326,6 +326,18 @@ final class DesktopWallController {
         entry.lastKeyframe = 0;
         rebindStream();
         entry.tileState(WallTile.STATE_CONNECTING, entry.failures > 0 ? L10n.tr("正在重新连接…") : L10n.tr("正在建立预览连接…"));
+        // Give a fresh peer a bounded window for its first picture, then restart it once.
+        final Entry scheduled = entry;
+        main.postDelayed(() -> {
+            if (streaming != scheduled || scheduled.lastKeyframe != 0) return;
+            if (scheduled.retries++ >= 1) {
+                scheduled.tileState(WallTile.STATE_FAILED, L10n.tr("没有收到画面"));
+                return;
+            }
+            if (scheduled.session != null) { scheduled.session.close(); scheduled.session = null; }
+            scheduled.tileState(WallTile.STATE_CONNECTING, L10n.tr("正在重新连接…"));
+            start(scheduled, SystemClock.elapsedRealtime());
+        }, FIRST_FRAME_TIMEOUT_MS);
         schedule(dwell);
     }
 
@@ -366,12 +378,39 @@ final class DesktopWallController {
         }
     }
 
+    boolean streamingNow(){return streaming!=null;}
+
+    /** Start the rotation now (the surface became available after the page was built). */
+    void kick(){schedule(0);}
+
+    /** True when the streaming tile has produced no picture for the given time. */
+    boolean stalled(long millis) {
+        Entry current = streaming;
+        if (current == null || current.session == null) return false;
+        long last = current.session.lastFrame();
+        return last != 0 && SystemClock.elapsedRealtime() - last > millis;
+    }
+
+    /** Route a decoded frame notification of the given peer id to the tile that owns it. */
+    void onPeerFrame(String peerId) {
+        Entry entry = entries.get(peerId);
+        if (entry != null) onFrame(entry);
+    }
+
     /** Called when the streaming peer renders a frame: the picture is live, extend the dwell. */
     void onFrame(Entry entry) {
         if (entry == null || entry != streaming) return;
         entry.lastKeyframe = SystemClock.elapsedRealtime();
-        if (entry.state != WallTile.STATE_PREVIEW) {
+        boolean first = entry.state != WallTile.STATE_PREVIEW;
+        if (first) {
             entry.tileState(WallTile.STATE_PREVIEW, L10n.tr("预览"));
+            rebindStream();
+            entry.tile.showStill(null, platformLabel(entry.platform));
+            entry.tile.showLive(true);
+        }
+        // The shared surface can be re-bound by layout changes; keep it on the live tile.
+        if (first || SystemClock.elapsedRealtime() - lastBindCheck > 1000) {
+            lastBindCheck = SystemClock.elapsedRealtime();
             rebindStream();
         }
     }

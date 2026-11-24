@@ -37,6 +37,7 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     private float pinchSpan;
     private long touchRevision;
     private boolean suppressPointerGesture;
+    private boolean viewOnly;
     void setRelative(boolean value) { releaseMouse(); relative=value; }
     void setPictureInPicture(boolean value) {
         if(pictureInPicture==value)return;
@@ -46,6 +47,13 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         Rect bounds=new Rect();video.getGlobalVisibleRect(bounds);return bounds;
     }
     void releaseMouse() { mouseInput.releaseAll(); dragging=false; suppressPointerGesture=true; }
+    /** Watch-only: touches still pan/zoom locally, but no pointer or tap reaches the remote. */
+    void setViewOnly(boolean value) {
+        viewOnly=value;
+        if(value)releaseMouse();
+        cursor.setVisibility(value?GONE:VISIBLE);
+    }
+    boolean viewOnly() { return viewOnly; }
     private boolean suppressPointerGesture() {
         return suppressPointerGesture || mouseInput.hasVirtualButton() || touchRevision != mouseInput.revision();
     }

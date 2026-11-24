@@ -18,6 +18,8 @@ final class SessionControls extends FrameLayout {
         default void displayResolution(RemoteDisplayResolutions.Mode mode) { }
         void sendFile(); void saveFile(); void secureAttention();
         default void togglePrivacy() { }
+        /** Show the desktop without sending input until the user takes control. */
+        default void toggleViewOnly() { }
     }
     private final MobileUi ui;
     private final Actions actions;
@@ -29,7 +31,8 @@ final class SessionControls extends FrameLayout {
     private final IntConsumer keyboardInsetChanged;
     private VirtualMouseBar mouseBar;
     private float mouseX = Float.NaN, mouseY = Float.NaN;
-    private boolean mouseVisible = true, pictureInPicture;
+    private boolean mouseVisible = true, pictureInPicture, viewOnly;
+    boolean viewOnly() { return viewOnly; }
     private ScrollView menuScroll;
     private int menuColumns=3;
     private final ViewTreeObserver.OnGlobalLayoutListener legacyKeyboardLayout=this::legacyKeyboardLayout;
@@ -99,7 +102,7 @@ final class SessionControls extends FrameLayout {
     private void toggleMouse(){cancelMouseInput();mouseVisible=!mouseVisible;closeMenu();positionMouse();}
     private void positionMouse(){
         if(mouseBar==null)return;
-        boolean visible=!pictureInPicture&&mouseVisible&&waiting.getVisibility()==GONE;
+        boolean visible=!pictureInPicture&&!viewOnly&&mouseVisible&&waiting.getVisibility()==GONE;
         if(!visible){if(mouseBar.getVisibility()==VISIBLE)cancelMouseInput();mouseBar.setVisibility(GONE);return;}
         float width=ui.dp(VirtualMouseBar.WIDTH_DP),height=ui.dp(VirtualMouseBar.HEIGHT_DP),gap=ui.dp(6),margin=ui.dp(8);
         float x = Float.isNaN(mouseX) ? getWidth() - width - ui.dp(16) : mouseX;
@@ -153,18 +156,22 @@ final class SessionControls extends FrameLayout {
             scroll.setScrollBarStyle(View.SCROLLBARS_OUTSIDE_INSET);body.setPadding(0,0,ui.dp(6),0);
         }
         if(page.equals("controls")){
-            String[] labels={L10n.tr("键盘"),mouseVisible?L10n.tr("收起鼠标"):L10n.tr("虚拟鼠标"),relative?L10n.tr("相对鼠标"):L10n.tr("绝对鼠标"),L10n.tr("显示器"),L10n.tr("画面设置"),muted?L10n.tr("静音"):L10n.tr("声音"),L10n.tr("发送文件"),L10n.tr("网络状态"),"Ctrl+Alt+Del",L10n.tr("剪贴板"),L10n.tr("隐私屏")};
-            String[] icons={"keyboard","mouse","mouse","display","sliders","audio","folder","chart","lock","clipboard","eye"};
-            Runnable[] clicks={()->{closeMenu();toggleKeyboard();},this::toggleMouse,actions::mouse,actions::display,()->openMenu("video"),actions::mute,actions::sendFile,()->openMenu("network"),actions::secureAttention,actions::clipboard,actions::togglePrivacy};
+            String[] labels={viewOnly?L10n.tr("仅预览"):L10n.tr("开始控制"),L10n.tr("键盘"),mouseVisible?L10n.tr("收起鼠标"):L10n.tr("虚拟鼠标"),relative?L10n.tr("相对鼠标"):L10n.tr("绝对鼠标"),L10n.tr("显示器"),L10n.tr("画面设置"),muted?L10n.tr("静音"):L10n.tr("声音"),L10n.tr("发送文件"),L10n.tr("网络状态"),"Ctrl+Alt+Del",L10n.tr("剪贴板"),L10n.tr("隐私屏")};
+            String[] icons={"eye_off","keyboard","mouse","mouse","display","sliders","audio","folder","chart","lock","clipboard","eye"};
+            Runnable[] clicks={actions::toggleViewOnly,()->{closeMenu();toggleKeyboard();},this::toggleMouse,actions::mouse,actions::display,()->openMenu("video"),actions::mute,actions::sendFile,()->openMenu("network"),actions::secureAttention,actions::clipboard,actions::togglePrivacy};
             menuColumns=controlColumns();
             java.util.List<Integer> visibleControls=new java.util.ArrayList<>();
             for(int index=0;index<labels.length;index++){
-                if(index==8&&!secureAttentionVisible||index==10&&!privacy.desktopAvailable)continue;
+                // Input controls make no sense while only watching: keep eye/keyboard/mouse/
+                // display/quality/network available and hide the rest.
+                if(index==9&&!secureAttentionVisible||index==11&&!privacy.desktopAvailable)continue;
+                if(viewOnly&&(index==2||index==3||index==7||index==10))continue;
                 visibleControls.add(index);
             }
             int controlCount=visibleControls.size();
             for(int row=0;row<(controlCount+menuColumns-1)/menuColumns;row++){LinearLayout line=ui.row();for(int col=0;col<menuColumns;col++){int position=row*menuColumns+col;if(position>=controlCount){View spacer=new View(getContext());LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,ui.dp(52),1);if(col>0)p.leftMargin=ui.dp(7);line.addView(spacer,p);continue;}int index=visibleControls.get(position);LinearLayout control=ui.column();control.setGravity(Gravity.CENTER);control.setBackground(ui.background(0xFFF0F0F2,10));MobileUi.Icon icon=ui.icon(icons[index],INK);control.addView(icon,ui.size(19,19));ui.gap(control,4);TextView caption=ui.text(labels[index],10,false);caption.setMaxLines(2);caption.setAutoSizeTextTypeUniformWithConfiguration(8,10,1,android.util.TypedValue.COMPLEX_UNIT_SP);caption.setGravity(Gravity.CENTER);control.addView(caption);control.setContentDescription(labels[index]);control.setClickable(true);control.setFocusable(true);control.setOnClickListener(v->clicks[index].run());
-                    if(index==10){privacyButton=control;privacyIcon=icon;privacyCaption=caption;}
+                    if(index==11){privacyButton=control;privacyIcon=icon;privacyCaption=caption;}
+                    if(index==0&&viewOnly)control.setBackground(ui.background(0xFFE3EEFB,10));
                     LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,ui.dp(52),1);if(col>0)p.leftMargin=ui.dp(7);line.addView(control,p);
                 }body.addView(line);if((row+1)*menuColumns<controlCount)ui.gap(body,7);}
             privacyFeedback=ui.text("",11,false);privacyFeedback.setTextColor(SECONDARY);privacyFeedback.setPadding(0,ui.dp(7),0,0);privacyFeedback.setAccessibilityLiveRegion(ACCESSIBILITY_LIVE_REGION_POLITE);body.addView(privacyFeedback);renderPrivacy();
@@ -183,6 +190,19 @@ final class SessionControls extends FrameLayout {
         ui.gap(menu,9);TextView disconnect=ui.action(L10n.tr("断开连接"),Color.WHITE,()->{closeMenu();closeKeyboard();actions.disconnect();});disconnect.setMinHeight(ui.dp(34));disconnect.setTextSize(14);disconnect.setBackground(ui.background(RED,8));menu.addView(disconnect,ui.size(-1,34));
         addView(menu,new LayoutParams(panelWidth(getWidth()),panelHeight(getHeight())));orb.bringToFront();orb.setContentDescription(L10n.tr("收起远程控制菜单"));
     }
+    /** Mirror the preview-only state so the orb and the menu entry describe it honestly. */
+    void setViewOnly(boolean value) {
+        if (viewOnly == value) return;
+        viewOnly = value;
+        orb.bringToFront();
+        orb.setContentDescription(L10n.tr(value ? "仅预览，轻触开始控制" : "展开远程控制菜单"));
+        if (value) cancelMouseInput();
+        closeKeyboard();
+        positionMouse();
+        // Rebuild the menu so the entry switches between 仅预览 / 开始控制.
+        if (menu != null && menuPage.equals("controls")) openMenu("controls");
+    }
+
     private void renderPrivacy(){
         if(menu!=null&&menuPage.equals("controls")&&(privacyButton!=null)!=privacy.desktopAvailable){
             openMenu("controls");return;

@@ -65,6 +65,8 @@ public final class MainActivity extends Activity implements NativeSession.Listen
     private final java.util.List<WallTile> wallTiles=new java.util.ArrayList<>();
     private DesktopWallController pendingWallSurface;
     private int pendingControlDisplay;
+    /** Preview-only control screen: the picture streams, the peer sends no input. */
+    private boolean viewOnlySession;
     private RemotePreviewStore.Capture previewCapture;
     private boolean previewCopying,updatingPreviewSwitch;
     private int previewAttempts;
@@ -581,7 +583,12 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         for(DesktopWallController.Entry entry:entries){
             previews.load(serverKey(),entry.id,bitmap->{if(bitmap!=null&&wall!=null)wall.setStill(entry.id,bitmap);});
         }
-        wall.setVisible(true);
+        // The shared surface is measured on the next frame; start the cycle only then.
+        wallStream.post(()->{
+            if(wall==null)return;
+            wall.setVisible(true);
+            wallStream.postDelayed(()->{if(wall!=null&&!wall.streamingNow())wall.kick();},600);
+        });
     }
     private int wallColumns(){
         int width=getResources().getConfiguration().screenWidthDp;
@@ -647,6 +654,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             public void mouse(){boolean relative=!preferences.getBoolean("relativeMouse",true);preferences.edit().putBoolean("relativeMouse",relative).apply();video.setRelative(relative);controls.setRelative(relative);}
             public void displayResolution(RemoteDisplayResolutions.Mode mode){updateDisplayResolution(mode);}
             public void videoSettings(int field,int value){RemoteVideoSettings.Values old=MainActivity.this.videoSettings.selection;updateVideoSettings(new RemoteVideoSettings.Values(field==0?value:old.quality,field==1?value:old.frameRate,field==2?value:old.preference));}
+            public void toggleViewOnly(){setViewOnly(!viewOnlySession);}
         });controls.setHostPlatform(hostPlatform);controls.setRelative(preferences.getBoolean("relativeMouse",true));controls.setMuted(muted);controls.videoSettings(videoSettings);controls.displayResolutions(displayResolutions,selectedDisplay);root.addView(controls,new LinearLayout.LayoutParams(-1,-1));getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         controls.attachMouseBar(safeArea,safeArea.indexOfChild(root),new VirtualMouseBar(ui,video.mouseInput));
         privacyChanged();
@@ -656,6 +664,22 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             if(!pictureInPictureUi&&!isInPictureInPictureMode())updatePictureInPicture();
         });
         pictureInPicture.connected();updatePictureInPicture();
+    }
+    /**
+     * Switch the live screen between control and watch-only. The stream keeps running at the
+     * normal cadence; only input is gated, and the page says which mode it is in.
+     */
+    private void setViewOnly(boolean value){
+        if(session==null||!ready)return;
+        if(viewOnlySession==value){if(controls!=null)controls.setViewOnly(value);return;}
+        viewOnlySession=value;
+        if(value&&controls!=null)controls.cancelMouseInput();
+        if(video!=null)video.setViewOnly(value);
+        if(controls!=null)controls.setViewOnly(value);
+        session.setInputBlocked(value);
+        // Return the stream to an interactive cadence if a wall preview throttled it.
+        session.streamMode(60,0,0,videoSettings.selection.quality,30,videoSettings.selection.preference);
+        toast(L10n.tr(value?"仅预览：不会发送任何操作，轻触画面或点击“开始控制”结束":"已开始控制"));
     }
     private void confirmDisconnect(){disconnectDialog=new AlertDialog.Builder(this).setTitle(L10n.tr("断开远程连接？")).setMessage(L10n.tr("断开后将返回首页")).setNegativeButton(L10n.tr("取消"),null).setPositiveButton(L10n.tr("断开连接"),(d,w)->end("")).show();}
     private void end(String reason){

@@ -82,6 +82,11 @@ final class NativeSession implements AutoCloseable {
     private final java.util.concurrent.atomic.AtomicBoolean mirrorEnabled=new java.util.concurrent.atomic.AtomicBoolean();
     private volatile long previewRequest;
     private volatile boolean previewAccepted, previewSupported, previewPending, previewOnlySession;
+    /**
+     * View-only screens keep the video but must not emit input. The gate is checked in the
+     * native-facing entry points so a stray gesture, chord or clipboard write cannot leak.
+     */
+    private volatile boolean inputBlocked;
     private final Runnable statisticsTick=new Runnable(){public void run(){
         if(closed)return;
         privacyScreen.tick(android.os.SystemClock.elapsedRealtime());
@@ -295,7 +300,7 @@ final class NativeSession implements AutoCloseable {
         if (!closed && player != null) player.offer(pcm);
     }
     @SuppressWarnings("unused") private void onNativeVideoFrame(long id,double latency,int width,int height){
-        if(!closed&&mirrorEnabled.get()&&mirrorTexture!=null&&previewAccepted)listener.previewFrame();
+        if(!closed&&mirrorEnabled.get()&&mirrorTexture!=null)listener.previewFrame();
         if(!closed)networkStatistics.frame(id,latency,width,height,RemoteNetworkStatistics.now());
     }
     void videoSettings(RemoteVideoSettings.Values settings,long requestId){
@@ -325,10 +330,17 @@ final class NativeSession implements AutoCloseable {
         });
     }
     void surface(Surface value) { execute(() -> { surface = value; if (handle != 0) nSurface(handle, value); }); }
-    void pointer(float x, float y, int flag, int wheel) { execute(() -> { if (connected) nPointer(handle, x, y, flag, wheel); }); }
-    void key(int code, boolean down) { execute(() -> { if (connected) nKey(handle, code, down); }); }
+    void pointer(float x, float y, int flag, int wheel) { execute(() -> { if (connected && !inputBlocked) nPointer(handle, x, y, flag, wheel); }); }
+    /**
+     * Watch-only mode. Existing gestures are released by the caller before this flips; the
+     * gate then drops every later pointer/key/text/clipboard/file command at the source.
+     */
+    void setInputBlocked(boolean value) { inputBlocked = value; }
+    boolean inputBlocked() { return inputBlocked; }
+
+    void key(int code, boolean down) { execute(() -> { if (connected && !inputBlocked) nKey(handle, code, down); }); }
     void chord(int code,int[] modifiers) {
-        if(closed||!connected)return;
+        if(closed||!connected||inputBlocked)return;
         int[] keys=RemoteShortcuts.normalize(modifiers);
         execute(()->{
             if(!connected)return;
@@ -339,7 +351,7 @@ final class NativeSession implements AutoCloseable {
     boolean textEdit(int deletions,String text) {
         byte[] bytes=text.getBytes(StandardCharsets.UTF_8);
         boolean unicode=supportsTextInput;
-        if(closed||!connected||deletions<0||deletions>4096||bytes.length>16*1024||text.indexOf('\0')>=0)return false;
+        if(closed||!connected||inputBlocked||deletions<0||deletions>4096||bytes.length>16*1024||text.indexOf('\0')>=0)return false;
         if(!unicode)for(char ch:text.toCharArray())if(KeyMap.ascii(ch)==0)return false;
         // Validate the entire edit before deleting anything. One RTC task preserves order.
         execute(()->{
@@ -371,6 +383,7 @@ final class NativeSession implements AutoCloseable {
         });});
     }
     void sendClipboard(byte[] bytes) {
+        if(inputBlocked)return;
         execute(() -> {
             boolean sent = connected && nClipboard(handle, bytes);
             ui(() -> listener.controlFeedback(sent ? L10n.tr("已发送，请在远端粘贴") : L10n.tr("指令发送失败，请重试")));
@@ -381,7 +394,7 @@ final class NativeSession implements AutoCloseable {
         ui(()->listener.controlFeedback(sent?L10n.tr("已发送 Ctrl+Alt+Del"):L10n.tr("指令发送失败，请重试")));
     });}
     void sendFile(android.net.Uri uri){
-        if(closed)return;
+        if(closed||inputBlocked)return;
         if(sendingFile){listener.controlFeedback(L10n.tr("请等待当前文件发送完成"));return;}
         sendingFile=true;listener.fileTransfer(L10n.tr("正在读取所选文件…"),0,true,null);
         documents.prepare(uri,new SessionDocuments.Prepared(){
@@ -427,17 +440,45 @@ final class NativeSession implements AutoCloseable {
         previewPending=false;
         previewStream(60,0,0,1,30,1);
     }
-    /** Reduced cadence subscription; fps 0 pauses, 1/8/15 are preview tiers. */
+    /**
+     * Wall cadence request. The wall is shown on its own page and only one tile decodes at a
+     * time, so it asks for a modest interactive cadence instead of the preview tiers: hosts
+     * that gate the 1/8/15 tiers behind a shared-screen lease would otherwise refuse the
+     * request and leave the tile frozen. {@code fps == 0} still pauses.
+     */
     void previewStream(int fps,int width,int height,int quality,int frameRate,int preference){
         if(closed||!connected)return;
         previewRequest++;
         previewPending=true;
         final long requestId=previewRequest;
+        main.postDelayed(()->{
+            if(closed||requestId!=previewRequest||!previewPending)return;
+            previewPending=false;
+            previewAccepted=false;
+            listener.previewStream(false,requestId);
+        },3000);
         execute(()->{if(!connected||closed)return;
             if(!nPreview(handle,fps,width,height,quality,frameRate,preference,requestId))
                 ui(()->{if(requestId==previewRequest){previewPending=false;listener.previewStream(false,requestId);}});
         });
     }
+    /**
+     * Stream quality for a preview-only screen: full interactive cadence, input still off.
+     * Kept separate from {@link #previewStream} so the wall's throttle and the control
+     * screen's picture never fight over the same request id.
+     */
+    void streamMode(int fps,int width,int height,int quality,int frameRate,int preference){
+        if(closed||!connected)return;
+        previewRequest++;
+        final long requestId=previewRequest;
+        previewPending=true;
+        execute(()->{if(!connected||closed)return;
+            if(!nPreview(handle,fps,width,height,quality,frameRate,preference,requestId))
+                ui(()->{if(requestId==previewRequest){previewPending=false;listener.previewStream(false,requestId);}});
+        });
+    }
+    /** Status of the last cadence request, for screens that show a picture without control. */
+    boolean streamAccepted(){return previewAccepted;}
     private void previewAccepted(boolean value,long requestId){
         if(requestId!=previewRequest)return;
         previewPending=false;previewAccepted=value;
