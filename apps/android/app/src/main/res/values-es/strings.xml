@@ -409,4 +409,9 @@
     <string name="text_568688e2090e14ea" formatted="false">"No se recibió imagen"</string>
     <string name="text_ddde08946298195d" formatted="false">"Restablecer"</string>
     <string name="text_aca32b4e2f6407af" formatted="false">"Solo ver: no se envía nada. Usa pellizco o doble toque para ampliar."</string>
+    <string name="text_2a6009d5910da601" formatted="false">"Girar pantalla"</string>
+    <string name="text_faaeee75afd03dcc" formatted="false">"Pasar a horizontal"</string>
+    <string name="text_256ef5490f35409d" formatted="false">"Pasar a vertical"</string>
+    <string name="text_196f430980a45fea" formatted="false">"Las tabletas y la pantalla dividida siguen el dispositivo"</string>
+    <string name="text_055a6b3a3de7a788" formatted="false">"Horizontal"</string>
 </resources>

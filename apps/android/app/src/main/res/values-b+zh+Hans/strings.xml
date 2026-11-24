@@ -409,4 +409,9 @@
     <string name="text_568688e2090e14ea" formatted="false">"没有收到画面"</string>
     <string name="text_ddde08946298195d" formatted="false">"还原"</string>
     <string name="text_aca32b4e2f6407af" formatted="false">"仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制"</string>
+    <string name="text_2a6009d5910da601" formatted="false">"切换横竖屏"</string>
+    <string name="text_faaeee75afd03dcc" formatted="false">"切换到横屏"</string>
+    <string name="text_256ef5490f35409d" formatted="false">"切换到竖屏"</string>
+    <string name="text_196f430980a45fea" formatted="false">"平板或分屏会跟随设备方向"</string>
+    <string name="text_055a6b3a3de7a788" formatted="false">"横屏"</string>
 </resources>

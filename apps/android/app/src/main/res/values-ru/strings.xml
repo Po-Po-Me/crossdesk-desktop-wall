@@ -409,4 +409,9 @@
     <string name="text_568688e2090e14ea" formatted="false">"Изображение не получено"</string>
     <string name="text_ddde08946298195d" formatted="false">"Сброс"</string>
     <string name="text_aca32b4e2f6407af" formatted="false">"Только просмотр: команды не отправляются. Масштаб — щипком или двойным касанием."</string>
+    <string name="text_2a6009d5910da601" formatted="false">"Повернуть экран"</string>
+    <string name="text_faaeee75afd03dcc" formatted="false">"Переключить в альбомный режим"</string>
+    <string name="text_256ef5490f35409d" formatted="false">"Переключить в портретный режим"</string>
+    <string name="text_196f430980a45fea" formatted="false">"Планшеты и разделённый экран следуют устройству"</string>
+    <string name="text_055a6b3a3de7a788" formatted="false">"Альбомный"</string>
 </resources>

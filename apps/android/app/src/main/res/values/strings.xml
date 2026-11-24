@@ -409,4 +409,9 @@
     <string name="text_568688e2090e14ea" formatted="false">"No picture received"</string>
     <string name="text_ddde08946298195d" formatted="false">"Reset"</string>
     <string name="text_aca32b4e2f6407af" formatted="false">"View only: nothing is sent. Pinch or double-tap to zoom, open the menu to take control."</string>
+    <string name="text_2a6009d5910da601" formatted="false">"Rotate screen"</string>
+    <string name="text_faaeee75afd03dcc" formatted="false">"Switch to landscape"</string>
+    <string name="text_256ef5490f35409d" formatted="false">"Switch to portrait"</string>
+    <string name="text_196f430980a45fea" formatted="false">"Tablets and split screen follow the device"</string>
+    <string name="text_055a6b3a3de7a788" formatted="false">"Landscape"</string>
 </resources>

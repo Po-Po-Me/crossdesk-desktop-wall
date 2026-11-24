@@ -136,6 +136,10 @@ final class MobileUi {
                 case "keyboard":
                     c.drawRoundRect(2,5,22,19,3,3,paint);for(int y=9;y<=12;y+=3)for(int x=6;x<=18;x+=4)c.drawPoint(x,y,paint);c.drawLine(7,16,17,16,paint);break;
                 case "display":c.drawRoundRect(2,3,22,17,2,2,paint);path(c,12,17,12,21);path(c,7,21,17,21);break;
+                case "rotate":
+                    // A phone turning from portrait to landscape.
+                    c.drawRoundRect(8,2,16,12,1.5f,1.5f,paint);path(c,5,16,9,12);path(c,9,12,9,16);
+                    c.drawArc(9,9,21,21,40,250,false,paint);path(c,18,19,21.5f,18.5f,20,15);break;
                 case "sliders":
                     for(int y=6;y<=18;y+=6){c.drawLine(3,y,21,y,paint);c.drawCircle(y==12?15:8,y,2,paint);}break;
                 case "audio":path(c,3,9,7,9,12,4,12,20,7,15,3,15,3,9);c.drawArc(10,5,21,19,-65,130,false,paint);break;

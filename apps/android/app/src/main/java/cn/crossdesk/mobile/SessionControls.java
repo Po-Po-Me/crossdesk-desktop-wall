@@ -23,6 +23,8 @@ final class SessionControls extends FrameLayout {
         /** Local zoom of the received picture (watch-only); never reaches the desktop. */
         default void zoomStep(float factor) { }
         default void zoomReset() { }
+        /** Lock the screen to the given orientation until the user rotates again. */
+        default void rotate(boolean landscape) { }
     }
     private final MobileUi ui;
     private final Actions actions;
@@ -53,7 +55,7 @@ final class SessionControls extends FrameLayout {
     private View privacyButton;
     private MobileUi.Icon privacyIcon;
     private TextView privacyFeedback,privacyCaption;
-    private View zoomChip, zoomOut, zoomIn, zoomReset;
+    private View zoomChip, zoomOut, zoomIn, zoomReset, rotateButton;
     private TextView zoomLabel;
     private TextView transferLabel,saveFileButton;
     private String transferStatus="";
@@ -93,6 +95,12 @@ final class SessionControls extends FrameLayout {
         zoomChip.setClickable(true);
         zoomChip.setVisibility(GONE);
         addView(zoomChip,new LayoutParams(-2,ui.dp(34)));
+        rotateButton=ui.iconButton("rotate",L10n.tr("切换横竖屏"),()->{
+            android.app.Activity activity=(android.app.Activity)getContext();
+            actions.rotate(!RemoteOrientation.isLandscape(activity));
+        });
+        rotateButton.setBackground(ui.background(0xE6202024,20));rotateButton.setElevation(ui.dp(6));
+        addView(rotateButton,new LayoutParams(ui.dp(40),ui.dp(40)));
     }
     void setRelative(boolean value){relative=value;if(menu!=null&&menuPage.equals("controls"))openMenu("controls");}
     void setHostPlatform(String platform){
@@ -123,8 +131,18 @@ final class SessionControls extends FrameLayout {
             positionZoom();
         }
     }
+    private void positionRotate() {
+        if (rotateButton == null) return;
+        int w = getWidth(), h = getHeight();
+        if (w == 0 || h == 0) return;
+        float size = ui.dp(40);
+        float x = w - size - ui.dp(12);
+        float y = ui.dp(12);
+        rotateButton.setTranslationX(x);
+        rotateButton.setTranslationY(y);
+    }
     private void positionZoom() {
-        if (zoomChip == null || zoomChip.getVisibility() != VISIBLE) return;
+        if (zoomChip == null || zoomChip.getVisibility() != VISIBLE) { positionRotate(); return; }
         int w = getWidth(), h = getHeight();
         if (w == 0 || h == 0) return;
         float chipW = ui.dp(34 * 3 + 50 + 12), chipH = ui.dp(34);
@@ -135,6 +153,7 @@ final class SessionControls extends FrameLayout {
         x = Math.max(ui.dp(8), Math.min(w - chipW - ui.dp(8), x));
         zoomChip.setTranslationX(x);
         zoomChip.setTranslationY(y);
+        positionRotate();
     }
     private void toggleMouse(){cancelMouseInput();mouseVisible=!mouseVisible;closeMenu();positionMouse();}
     private void positionMouse(){
@@ -238,6 +257,13 @@ final class SessionControls extends FrameLayout {
         positionMouse();
         // Rebuild the menu so the entry switches between 仅预览 / 开始控制.
         if (menu != null && menuPage.equals("controls")) openMenu("controls");
+    }
+
+    /** Keep the rotate button honest about what a tap will do. */
+    void setOrientationLandscape(boolean landscape) {
+        if (rotateButton == null) return;
+        rotateButton.setContentDescription(L10n.tr(landscape ? "切换到竖屏" : "切换到横屏"));
+        rotateButton.setAlpha(0.95f);
     }
 
     private void renderPrivacy(){
@@ -463,6 +489,7 @@ final class SessionControls extends FrameLayout {
         super.onSizeChanged(width,height,oldWidth,oldHeight);
         post(this::constrainPanels);
         positionZoom();
+        positionRotate();
     }
     private static float bound(float value,float min,float max){return Math.max(min,Math.min(value,Math.max(min,max)));}
 }

@@ -12119,6 +12119,66 @@
       "fr": "Affichage seul : aucune commande envoyée. Pincez ou double-tapez pour zoomer.",
       "es": "Solo ver: no se envía nada. Usa pellizco o doble toque para ampliar.",
       "pt-BR": "Apenas ver: nada é enviado. Use pinça ou toque duplo para ampliar."
+    },
+    "切换横竖屏": {
+      "zh-Hans": "切换横竖屏",
+      "en": "Rotate screen",
+      "ru": "Повернуть экран",
+      "zh-Hant": "切換橫豎屏",
+      "ja": "画面の向きを切り替え",
+      "ko": "화면 회전",
+      "de": "Bildschirm drehen",
+      "fr": "Pivoter l'écran",
+      "es": "Girar pantalla",
+      "pt-BR": "Girar tela"
+    },
+    "切换到横屏": {
+      "zh-Hans": "切换到横屏",
+      "en": "Switch to landscape",
+      "ru": "Переключить в альбомный режим",
+      "zh-Hant": "切換到橫屏",
+      "ja": "横向きに切り替え",
+      "ko": "가로 모드로 전환",
+      "de": "Querformat aktivieren",
+      "fr": "Passer en paysage",
+      "es": "Pasar a horizontal",
+      "pt-BR": "Mudar para paisagem"
+    },
+    "切换到竖屏": {
+      "zh-Hans": "切换到竖屏",
+      "en": "Switch to portrait",
+      "ru": "Переключить в портретный режим",
+      "zh-Hant": "切換到直屏",
+      "ja": "縦向きに切り替え",
+      "ko": "세로 모드로 전환",
+      "de": "Hochformat aktivieren",
+      "fr": "Passer en portrait",
+      "es": "Pasar a vertical",
+      "pt-BR": "Mudar para retrato"
+    },
+    "平板或分屏会跟随设备方向": {
+      "zh-Hans": "平板或分屏会跟随设备方向",
+      "en": "Tablets and split screen follow the device",
+      "ru": "Планшеты и разделённый экран следуют устройству",
+      "zh-Hant": "平板或分屏會跟隨裝置方向",
+      "ja": "タブレットと分割画面は端末の向きに従います",
+      "ko": "태블릿과 분할 화면은 기기 방향을 따릅니다",
+      "de": "Tablets und geteilter Bildschirm folgen dem Gerät",
+      "fr": "Tablettes et écran partagé suivent l'appareil",
+      "es": "Las tabletas y la pantalla dividida siguen el dispositivo",
+      "pt-BR": "Tablets e tela dividida seguem o dispositivo"
+    },
+    "横屏": {
+      "zh-Hans": "横屏",
+      "en": "Landscape",
+      "ru": "Альбомный",
+      "zh-Hant": "橫屏",
+      "ja": "横向き",
+      "ko": "가로",
+      "de": "Querformat",
+      "fr": "Paysage",
+      "es": "Horizontal",
+      "pt-BR": "Paisagem"
     }
   },
   "desktop": {
@@ -13601,7 +13661,12 @@
       "仅预览，轻触开始控制",
       "没有收到画面",
       "还原",
-      "仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制"
+      "仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制",
+      "切换横竖屏",
+      "切换到横屏",
+      "切换到竖屏",
+      "平板或分屏会跟随设备方向",
+      "横屏"
     ],
     "ios": [
       "%1$@ 传输失败",

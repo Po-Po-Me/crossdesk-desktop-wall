@@ -660,6 +660,12 @@ public final class MainActivity extends Activity implements NativeSession.Listen
                 video.zoomBy(factor);
                 if(controls!=null)controls.setZoomFactor(video.zoomScale());
             }
+            public void rotate(boolean landscape){
+                boolean fullScreenPhone=!isTablet()&&!isInMultiWindowMode();
+                if(!fullScreenPhone){toast(L10n.tr("平板或分屏会跟随设备方向"));return;}
+                if(landscape)remoteOrientation.lockLandscape(true);else remoteOrientation.lockPortrait(true);
+                if(video!=null)video.post(()->{if(controls!=null)controls.setOrientationLandscape(RemoteOrientation.isLandscape(MainActivity.this));});
+            }
             public void zoomReset(){
                 if(video==null)return;
                 video.resetZoom();
@@ -671,6 +677,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         video.remoteFocusChanged=()->{if(controls!=null)controls.resetKeyboardContext();};
         // Only the watch-only screen zooms locally; show the factor while it changes.
         video.viewOnlyFeedback=()->{if(controls!=null)controls.setZoomFactor(video.zoomScale());};
+        controls.setOrientationLandscape(RemoteOrientation.isLandscape(this));
         controls.requestApplyInsets();
         video.addOnLayoutChangeListener((view,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{
             if(!pictureInPictureUi&&!isInPictureInPictureMode())updatePictureInPicture();
@@ -1159,7 +1166,11 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         super.onConfigurationChanged(config);
         releaseKeys();
         if(!page.equals("session"))updateHomeOrientation();
-        else if(!isInPictureInPictureMode())remoteOrientation.update(!isTablet()&&!isInMultiWindowMode());
+        else if(!isInPictureInPictureMode()){
+            // The rotate button already asked for a fixed orientation; update() would keep it.
+            remoteOrientation.update(!isTablet()&&!isInMultiWindowMode());
+            if(controls!=null)controls.setOrientationLandscape(RemoteOrientation.isLandscape(this));
+        }
         sizePasswordDialog();
         if(privacyDialog instanceof PrivacyConsentDialog)((PrivacyConsentDialog)privacyDialog).updateSize();
         if(controls!=null&&!pictureInPictureUi)controls.post(controls::constrainPanels);

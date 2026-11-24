@@ -409,4 +409,9 @@
     <string name="text_568688e2090e14ea" formatted="false">"화면을 받지 못했습니다"</string>
     <string name="text_ddde08946298195d" formatted="false">"초기화"</string>
     <string name="text_aca32b4e2f6407af" formatted="false">"보기 전용: 조작이 전송되지 않습니다. 두 손가락 또는 더블 탭으로 확대하세요."</string>
+    <string name="text_2a6009d5910da601" formatted="false">"화면 회전"</string>
+    <string name="text_faaeee75afd03dcc" formatted="false">"가로 모드로 전환"</string>
+    <string name="text_256ef5490f35409d" formatted="false">"세로 모드로 전환"</string>
+    <string name="text_196f430980a45fea" formatted="false">"태블릿과 분할 화면은 기기 방향을 따릅니다"</string>
+    <string name="text_055a6b3a3de7a788" formatted="false">"가로"</string>
 </resources>

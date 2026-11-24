@@ -409,4 +409,9 @@
     <string name="text_568688e2090e14ea" formatted="false">"画面を受信できません"</string>
     <string name="text_ddde08946298195d" formatted="false">"リセット"</string>
     <string name="text_aca32b4e2f6407af" formatted="false">"表示のみ：操作は送信されません。ピンチまたはダブルタップで拡大できます。"</string>
+    <string name="text_2a6009d5910da601" formatted="false">"画面の向きを切り替え"</string>
+    <string name="text_faaeee75afd03dcc" formatted="false">"横向きに切り替え"</string>
+    <string name="text_256ef5490f35409d" formatted="false">"縦向きに切り替え"</string>
+    <string name="text_196f430980a45fea" formatted="false">"タブレットと分割画面は端末の向きに従います"</string>
+    <string name="text_055a6b3a3de7a788" formatted="false">"横向き"</string>
 </resources>

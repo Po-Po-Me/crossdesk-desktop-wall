@@ -409,4 +409,9 @@
     <string name="text_568688e2090e14ea" formatted="false">"Nenhuma imagem recebida"</string>
     <string name="text_ddde08946298195d" formatted="false">"Redefinir"</string>
     <string name="text_aca32b4e2f6407af" formatted="false">"Apenas ver: nada é enviado. Use pinça ou toque duplo para ampliar."</string>
+    <string name="text_2a6009d5910da601" formatted="false">"Girar tela"</string>
+    <string name="text_faaeee75afd03dcc" formatted="false">"Mudar para paisagem"</string>
+    <string name="text_256ef5490f35409d" formatted="false">"Mudar para retrato"</string>
+    <string name="text_196f430980a45fea" formatted="false">"Tablets e tela dividida seguem o dispositivo"</string>
+    <string name="text_055a6b3a3de7a788" formatted="false">"Paisagem"</string>
 </resources>

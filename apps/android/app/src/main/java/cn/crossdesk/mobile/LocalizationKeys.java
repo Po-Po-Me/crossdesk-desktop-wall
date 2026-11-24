@@ -415,6 +415,11 @@ final class LocalizationKeys {
         IDS.put("没有收到画面", R.string.text_568688e2090e14ea);
         IDS.put("还原", R.string.text_ddde08946298195d);
         IDS.put("仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制", R.string.text_aca32b4e2f6407af);
+        IDS.put("切换横竖屏", R.string.text_2a6009d5910da601);
+        IDS.put("切换到横屏", R.string.text_faaeee75afd03dcc);
+        IDS.put("切换到竖屏", R.string.text_256ef5490f35409d);
+        IDS.put("平板或分屏会跟随设备方向", R.string.text_196f430980a45fea);
+        IDS.put("横屏", R.string.text_055a6b3a3de7a788);
     }
     private LocalizationKeys() {}
 }
