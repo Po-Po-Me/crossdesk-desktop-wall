@@ -1034,7 +1034,11 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         if(session==null||ready)return;ready=true;if(progressDialog!=null){progressDialog.dismiss();progressDialog=null;}
         try{history.save(serverKey(),connectedRemote,connectedRemote,hostPlatform,rememberPassword,pendingPassword);}catch(Exception error){toast(L10n.tr("密码保存失败，本次连接仍可使用"));}pendingPassword="";sessionScreen(preferences.getBoolean("autoLandscape",false));
         if(!canUsePictureInPicture())prepareBackgroundSession(true);
-        if(videoSettings.supported&&videoSettings.requestId==0)updateVideoSettings(videoSettings.selection);
+        if(videoSettings.supported){
+            // Always re-assert the chosen profile once per session: hosts start conservative.
+            if(videoSettings.requestId==0)updateVideoSettings(videoSettings.selection);
+            else session.requestInteractiveVideo(videoSettings.selection.quality,videoSettings.selection.preference);
+        }
         if(foreground&&preferences.getBoolean("networkConsent",false))remoteVersionCheck.connected();
     }
     @Override public void ended(String reason){

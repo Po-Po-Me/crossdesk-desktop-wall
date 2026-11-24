@@ -316,9 +316,12 @@ MiniRtcParams Parameters(Session* s, bool controller) {
   p.turn_mode = MiniRtcTurnAutoUdpTcp;
   p.enable_srtp = true;
   p.video_content_type = MiniRtcVideoContentType::ScreenContent;
-  p.video_quality = MiniRtcVideoQualityMedium;
-  p.video_frame_rate = 30;
-  p.video_degradation_preference = MiniRtcVideoDegradationPreference::Balanced;
+  // Match the app's default (high quality, 60 fps capture, resolution preserved); the host
+  // confirms or downshifts these through video_settings, and a stale 30 fps default here kept
+  // pulling the encoder back to ~10-15 fps while the UI still asked for 60.
+  p.video_quality = MiniRtcVideoQualityHigh;
+  p.video_frame_rate = 60;
+  p.video_degradation_preference = MiniRtcVideoDegradationPreference::MaintainResolution;
   p.on_signal_status = Signal; p.on_connection_status = Connection;
   p.on_signal_message = SignalMessage;
   p.on_net_status_report = Network; p.on_receive_data_buffer = Data;

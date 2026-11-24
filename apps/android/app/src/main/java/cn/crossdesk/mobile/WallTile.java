@@ -213,11 +213,12 @@ final class WallTile extends FrameLayout {
             }
             float px = (x + offsetX) * getWidth();
             float py = (y + offsetY) * getHeight();
-            float density = getResources().getDisplayMetrics().density;
+            // Match a desktop arrow: about 2.4% of the picture height on the 24-unit grid.
+            float scale = Math.max(0.3f, getHeight() * 0.024f / 24f);
             canvas.save();
             canvas.translate(px, py);
-            canvas.scale(density, density);
-            paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.75f); paint.setColor(Color.BLACK);
+            canvas.scale(scale, scale);
+            paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.6f); paint.setColor(Color.BLACK);
             canvas.drawPath(path, paint);
             paint.setStyle(Paint.Style.FILL); paint.setColor(Color.WHITE);
             canvas.drawPath(path, paint);

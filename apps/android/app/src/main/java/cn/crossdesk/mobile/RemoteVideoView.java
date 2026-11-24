@@ -494,19 +494,24 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
      * picture space, so zoom and pan move it with the image.
      */
     private void drawRemoteCursor(Canvas canvas) {
+        // Control mode already shows the local touch arrow (and most hosts embed the pointer
+        // in the captured frame), so only watch-only draws the host's own pointer.
+        if (!viewOnly) return;
         if (!remoteCursorReported || !remoteCursorVisible || !remoteCursorPositionValid) return;
         if (remoteCursorShape == 1) return; // shape "none": the host asked for no pointer
         float px = viewport.left() + remoteCursorX * viewport.width();
         float py = viewport.top() + remoteCursorY * viewport.height();
-        float density = getResources().getDisplayMetrics().density;
+        // The paths below are drawn on a 24-unit grid; scale them to about 2.4% of the picture
+        // height (~22 px on a 900 px desktop), which matches a desktop arrow at 100%.
+        float scale = Math.max(0.35f, viewport.height() * 0.024f / 24f);
         // Visual offset moves the drawn arrow so its hotspot matches the host position.
         px += remoteCursorOffsetX * viewport.width();
         py += remoteCursorOffsetY * viewport.height();
         canvas.save();
         canvas.translate(px, py);
-        canvas.scale(density, density);
+        canvas.scale(scale, scale);
         remoteCursorPaint.setStyle(Paint.Style.STROKE);
-        remoteCursorPaint.setStrokeWidth(1.75f);
+        remoteCursorPaint.setStrokeWidth(1.6f);
         remoteCursorPaint.setColor(Color.BLACK);
         canvas.drawPath(cursorPathFor(remoteCursorShape), remoteCursorPaint);
         remoteCursorPaint.setStyle(Paint.Style.FILL);

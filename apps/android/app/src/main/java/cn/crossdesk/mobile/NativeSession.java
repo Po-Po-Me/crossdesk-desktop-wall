@@ -495,6 +495,17 @@ final class NativeSession implements AutoCloseable {
     }
     /** Status of the last cadence request, for screens that show a picture without control. */
     boolean streamAccepted(){return previewAccepted;}
+    /**
+     * Ask the host for the interactive cadence explicitly (60 fps, high quality, resolution
+     * preserved). Hosts start their encoder from a conservative default, so a session that
+     * never re-asserts these can sit at 10-15 fps even though the UI says 60.
+     */
+    void requestInteractiveVideo(int quality,int preference){
+        if(closed)return;
+        final long request=++videoSettingsRequest;
+        execute(()->{if(connected&&!closed)nVideoSettings(handle,quality,60,preference,request);});
+    }
+    private volatile long videoSettingsRequest;
     private void previewAccepted(boolean value,long requestId){
         if(requestId!=previewRequest)return;
         previewPending=false;previewAccepted=value;
