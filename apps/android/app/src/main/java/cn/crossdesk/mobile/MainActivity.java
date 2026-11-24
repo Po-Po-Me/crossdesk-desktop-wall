@@ -73,7 +73,24 @@ public final class MainActivity extends Activity implements NativeSession.Listen
      * start (~2 Mbps) until the user touched 画面设置. Retry until the host confirms.
      */
     private int videoProfileAttempts;
-    private Runnable videoProfileRetry;
+    /**
+     * The host applies video_settings only for an authorized controller on the control stream,
+     * and it creates the encoder ~0.3 s after ICE connects — before our profile can arrive.
+     * A single early request is therefore dropped (host log: no "Live video settings" until the
+     * user touched 画面设置, encoder stuck at 854 kbps). Keep re-sending until the host ACKs.
+     */
+    private boolean videoProfilePending;
+    private final Runnable videoProfileTicker=new Runnable(){public void run(){
+        if(!videoProfilePending||session==null||session.isClosed()){videoProfilePending=false;return;}
+        if(!videoSettings.supported||videoSettings.pending||videoProfileAttempts>=20){
+            if(videoProfileAttempts>=20&&!videoSettings.pending)videoProfilePending=false;
+            mainHandler.postDelayed(this,1500);
+            return;
+        }
+        videoProfileAttempts++;
+        sendVideoProfile();
+        mainHandler.postDelayed(this,1500);
+    }};
     private RemotePreviewStore.Capture previewCapture;
     private boolean previewCopying,updatingPreviewSwitch;
     private int previewAttempts;
@@ -1043,7 +1060,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         if(session==null||ready)return;ready=true;if(progressDialog!=null){progressDialog.dismiss();progressDialog=null;}
         try{history.save(serverKey(),connectedRemote,connectedRemote,hostPlatform,rememberPassword,pendingPassword);}catch(Exception error){toast(L10n.tr("密码保存失败，本次连接仍可使用"));}pendingPassword="";sessionScreen(preferences.getBoolean("autoLandscape",false));
         if(!canUsePictureInPicture())prepareBackgroundSession(true);
-        if(videoSettings.supported)applyVideoProfile();
+        applyVideoProfile();
         if(foreground&&preferences.getBoolean("networkConsent",false))remoteVersionCheck.connected();
     }
     @Override public void ended(String reason){
@@ -1114,7 +1131,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         if(!ready||session==null||!preferences.getBoolean("networkConsent",false))return false;
         long request=videoSettings.begin(value);if(request<0)return false;
         cancelVideoSettingsTimeout();if(controls!=null)controls.videoSettings(videoSettings);session.videoSettings(value,request);
-        videoSettingsTimeout=()->{videoSettings.expire(request);if(controls!=null)controls.videoSettings(videoSettings);retryVideoProfile();};mainHandler.postDelayed(videoSettingsTimeout,5000);
+        videoSettingsTimeout=()->{videoSettings.expire(request);if(controls!=null)controls.videoSettings(videoSettings);};mainHandler.postDelayed(videoSettingsTimeout,5000);
         return true;
     }
     /**
@@ -1122,22 +1139,50 @@ public final class MainActivity extends Activity implements NativeSession.Listen
      * A single lost request is what pinned the stream at the host's low default bitrate while
      * the UI already claimed 高画质 / 60 fps.
      */
+    /** Begin (or restart) the confirmed profile handshake for this session. */
     private void applyVideoProfile(){
-        if(!ready||session==null||!videoSettings.supported)return;
-        cancelVideoProfileRetry();
+        if(session==null||session.isClosed())return;
+        videoProfilePending=true;
         videoProfileAttempts=0;
-        updateVideoSettings(videoSettings.selection);
+        mainHandler.removeCallbacks(videoProfileTicker);
+        mainHandler.post(videoProfileTicker);
     }
-    private void retryVideoProfile(){
-        if(!ready||session==null||!videoSettings.supported)return;
-        if(videoProfileAttempts>=4)return;
-        videoProfileAttempts++;
-        cancelVideoProfileRetry();
-        videoProfileRetry=()->{if(ready&&session!=null&&videoSettings.supported)updateVideoSettings(videoSettings.selection);};
-        mainHandler.postDelayed(videoProfileRetry,1200L*videoProfileAttempts);
+    /**
+     * The Windows WMF encoder is created with the bandwidth estimate of that instant
+     * (~0.85 Mbps right after ICE connects) and cannot change bitrate at runtime
+     * (`dynamic_capability=unavailable`, `writes_enabled=false` in the host log). It only
+     * picks up a higher bitrate when it is re-created. Bandwidth estimation needs a few
+     * seconds of traffic, so re-create it once after ~9 s and once after ~20 s by toggling the
+     * preference (which forces re-creation) and immediately restoring the chosen profile.
+     */
+    private void scheduleEncoderRefresh(){
+        mainHandler.postDelayed(this::forceEncoderRefresh,9000);
+        mainHandler.postDelayed(this::forceEncoderRefresh,20000);
     }
-    private void cancelVideoProfileRetry(){
-        if(videoProfileRetry!=null){mainHandler.removeCallbacks(videoProfileRetry);videoProfileRetry=null;}
+    private void forceEncoderRefresh(){
+        if(session==null||session.isClosed()||!videoSettings.supported)return;
+        if(viewOnlySession)return;
+        RemoteVideoSettings.Values real=videoSettings.selection;
+        int alternate=real.preference==0?1:0;
+        RemoteVideoSettings.Values alt=new RemoteVideoSettings.Values(real.quality,real.frameRate,alternate);
+        long first=videoSettings.begin(alt);
+        if(first<0)return;
+        session.videoSettings(alt,first);
+        mainHandler.postDelayed(()->{
+            if(session==null||session.isClosed())return;
+            long second=videoSettings.begin(real);
+            if(second<0)return;
+            if(controls!=null)controls.videoSettings(videoSettings);
+            session.videoSettings(real,second);
+        },700);
+    }
+    private boolean sendVideoProfile(){
+        if(session==null||session.isClosed()||!videoSettings.supported)return false;
+        long request=videoSettings.begin(videoSettings.selection);
+        if(request<0)return false;
+        if(controls!=null)controls.videoSettings(videoSettings);
+        session.videoSettings(videoSettings.selection,request);
+        return true;
     }
     @Override public void data(JSONObject message){
         if(session==null)return;
@@ -1155,7 +1200,10 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             videoSettings.receive(message);
             if(!videoSettings.pending)cancelVideoSettingsTimeout();
             if(wasPending&&!videoSettings.pending&&!videoSettings.failed){
-                videoProfileAttempts=0;cancelVideoProfileRetry();
+                // Host confirmed 高画质/60fps; stop re-sending and plan one refresh.
+                videoProfilePending=false;videoProfileAttempts=0;
+                mainHandler.removeCallbacks(videoProfileTicker);
+                scheduleEncoderRefresh();
             }
             if(controls!=null)controls.videoSettings(videoSettings);
             // The host only echoes what it applied; persisting that echo is what quietly
@@ -1163,7 +1211,6 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             // A rejected request means the host could not honour the profile; keep the UI
             // honest by falling back to the value it actually applied.
             if(videoSettings.failed&&controls!=null)controls.videoSettings(videoSettings);
-            if(videoSettings.failed)retryVideoProfile();
             return;
         }
         JSONObject info=message.optJSONObject("host_info");
@@ -1173,7 +1220,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             boolean wasSupported=videoSettings.supported;videoSettings.setSupported(info.optBoolean("supports_video_settings",false));
             if(!videoSettings.supported)cancelVideoSettingsTimeout();
             if(controls!=null)controls.videoSettings(videoSettings);
-            if(videoSettings.supported&&!wasSupported)applyVideoProfile();
+            if(videoSettings.supported)applyVideoProfile();
             if(foreground&&preferences.getBoolean("networkConsent",false))remoteVersionCheck.hostInfo(info);
         }
     }
