@@ -55,8 +55,9 @@ final class SessionControls extends FrameLayout {
     private View privacyButton;
     private MobileUi.Icon privacyIcon;
     private TextView privacyFeedback,privacyCaption;
-    private View zoomChip, zoomOut, zoomIn, zoomReset, rotateButton;
-    private TextView zoomLabel;
+    private LinearLayout zoomChip;
+    private TextView zoomOut, zoomIn, zoomReset, zoomLabel;
+    private View rotateButton;
     private TextView transferLabel,saveFileButton;
     private String transferStatus="";
     private boolean hasReceivedFile;

@@ -9,6 +9,7 @@ import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.PixelCopy;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
