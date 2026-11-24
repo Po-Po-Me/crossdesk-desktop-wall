@@ -1,7 +1,10 @@
 package cn.crossdesk.mobile;
 
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Rect;
 import android.view.Gravity;
 import android.view.View;
@@ -83,12 +86,17 @@ final class WallTile extends FrameLayout {
         subtitle = ui.text("", 11, false);
         subtitle.setTextColor(0x99FFFFFF);
         strip.addView(subtitle, ui.size(-1, 16));
+        cursorOverlay = new CursorOverlay();
+        picture.addView(cursorOverlay, new LayoutParams(-1, -1));
         addView(strip, new LayoutParams(-1, -2, Gravity.BOTTOM));
         setForeground(ui.selectable(0x22FFFFFF));
         setFocusable(true);
         setClickable(true);
         setContentDescription(L10n.tr("预览这个桌面，轻触开始控制"));
     }
+
+    /** The host pointer, drawn in the picture window above the shared surface. */
+    private final CursorOverlay cursorOverlay;
 
     /** The shared stream surface is displayed here while this tile owns the stream. */
     void hostStream(TextureView surface) {
@@ -116,6 +124,13 @@ final class WallTile extends FrameLayout {
                 pictureLocation[1] - tileLocation[1] + picture.getHeight());
     }
 
+    void previewCursor(boolean visible, int shape, boolean positionUpdate, boolean positionValid,
+                       float x, float y, float offsetX, float offsetY, long sequence) {
+        cursorOverlay.apply(visible, shape, positionUpdate, positionValid, x, y, offsetX, offsetY, sequence);
+    }
+
+    void clearCursor() { cursorOverlay.clear(); }
+
     void showLive(boolean value) {
         boolean mine = value && host != null && live.getChildCount() > 0;
         live.setVisibility(mine ? VISIBLE : GONE);
@@ -139,6 +154,75 @@ final class WallTile extends FrameLayout {
         badge.setText(platform == null || platform.isEmpty() ? L10n.tr("远程电脑") : platform);
         name.setText(title);
         subtitle.setText(detail);
+    }
+
+    /** Arrow/text/crosshair shapes matching RemoteVideoView's host pointer. */
+    private final class CursorOverlay extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path path = new Path();
+        private boolean visible;
+        private int shape = 0, pathShape = -1;
+        private float x = .5f, y = .5f, offsetX, offsetY;
+        private long sequence = Long.MIN_VALUE;
+
+        CursorOverlay() {
+            super(WallTile.this.getContext());
+            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+            setClickable(false);
+        }
+
+        void apply(boolean visibleValue, int shapeValue, boolean positionUpdate, boolean positionValid,
+                   float xValue, float yValue, float offsetXValue, float offsetYValue, long sequenceValue) {
+            if (sequenceValue != 0 && sequenceValue <= sequence) return;
+            sequence = sequenceValue;
+            visible = visibleValue;
+            shape = Math.max(0, Math.min(28, shapeValue));
+            offsetX = offsetXValue;
+            offsetY = offsetYValue;
+            if (positionUpdate) {
+                if (positionValid) { x = Math.max(0f, Math.min(1f, xValue)); y = Math.max(0f, Math.min(1f, yValue)); }
+                else visible = false;
+            }
+            invalidate();
+        }
+
+        void clear() { visible = false; sequence = Long.MIN_VALUE; invalidate(); }
+
+        @Override protected void onDraw(Canvas canvas) {
+            if (!visible || shape == 1 || getWidth() == 0) return;
+            if (pathShape != shape) {
+                path.rewind();
+                pathShape = shape;
+                switch (shape) {
+                    case 7:
+                        path.moveTo(6, 2); path.lineTo(6, 20);
+                        path.moveTo(2, 3); path.lineTo(10, 3);
+                        path.moveTo(2, 19); path.lineTo(10, 19);
+                        break;
+                    case 6:
+                        path.moveTo(11, 1); path.lineTo(11, 21);
+                        path.moveTo(1, 11); path.lineTo(21, 11);
+                        break;
+                    default:
+                        path.moveTo(1, 1); path.lineTo(1, 18);
+                        path.lineTo(5, 14); path.lineTo(8, 21);
+                        path.lineTo(11, 19.6f); path.lineTo(8, 12.6f);
+                        path.lineTo(13, 12.2f); path.close();
+                        break;
+                }
+            }
+            float px = (x + offsetX) * getWidth();
+            float py = (y + offsetY) * getHeight();
+            float density = getResources().getDisplayMetrics().density;
+            canvas.save();
+            canvas.translate(px, py);
+            canvas.scale(density, density);
+            paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.75f); paint.setColor(Color.BLACK);
+            canvas.drawPath(path, paint);
+            paint.setStyle(Paint.Style.FILL); paint.setColor(Color.WHITE);
+            canvas.drawPath(path, paint);
+            canvas.restore();
+        }
     }
 
     void showState(int state, String text) {

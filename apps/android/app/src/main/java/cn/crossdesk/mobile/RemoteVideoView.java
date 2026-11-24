@@ -74,7 +74,10 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     void setViewOnly(boolean value) {
         viewOnly=value;
         if(value)releaseMouse();
-        cursor.setVisibility(value?GONE:VISIBLE);
+        // The overlay stays visible: watch-only still shows the host's own pointer, only the
+        // local touch arrow is suppressed.
+        cursor.localPointerVisible=!value;
+        cursor.invalidate();
     }
     boolean viewOnly() { return viewOnly; }
 
@@ -470,8 +473,11 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         @android.annotation.SuppressLint("ClickableViewAccessibility")
         @Override public boolean onTouchEvent(MotionEvent event) { return touch(event); }
         @Override public boolean performClick() { super.performClick(); click(1, 2); return true; }
+        /** The local touch arrow; hidden while the screen is watch-only. */
+        boolean localPointerVisible = true;
         @Override protected void onDraw(Canvas canvas) {
             drawRemoteCursor(canvas);
+            if (!localPointerVisible) return;
             int saved=canvas.save();
             canvas.translate(viewport.left()+x*viewport.width(),viewport.top()+y*viewport.height());
             float density=getResources().getDisplayMetrics().density;canvas.scale(density,density);

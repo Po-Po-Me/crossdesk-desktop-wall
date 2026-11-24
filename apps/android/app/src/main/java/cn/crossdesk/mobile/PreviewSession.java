@@ -15,6 +15,10 @@ import android.os.SystemClock;
 final class PreviewSession implements NativeSession.Listener {
     interface Tile {
         void previewState(int state, String detail);
+        /** The host's pointer, so the wall tile can draw it over the shared surface. */
+        default void previewCursor(boolean visible, int shape, boolean positionUpdate,
+                                   boolean positionValid, float x, float y,
+                                   float offsetX, float offsetY, int display, long sequence) { }
     }
 
     static final int STATE_CONNECTING = 0, STATE_CONNECTED = 1, STATE_FAILED = 2;
@@ -159,6 +163,13 @@ final class PreviewSession implements NativeSession.Listener {
     }
 
     @Override public void videoSize(int width, int height) { lastKeyframe = SystemClock.elapsedRealtime(); }
+
+    @Override public void remoteCursor(boolean visible, int shape, boolean positionUpdate,
+                                       boolean positionValid, float x, float y,
+                                       float offsetX, float offsetY, int display, long sequence) {
+        if (handedOff || !isStreaming) return;
+        tile.previewCursor(visible, shape, positionUpdate, positionValid, x, y, offsetX, offsetY, display, sequence);
+    }
     long lastFrame() { return lastKeyframe; }
 
     @Override public void previewFrame() {

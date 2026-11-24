@@ -259,7 +259,7 @@ final class DesktopWallController {
     }
 
     private void release(Entry entry) {
-        if (entry.tile != null) entry.tile.showLive(false);
+        if (entry.tile != null) { entry.tile.showLive(false); entry.tile.clearCursor(); }
         if (streaming == entry) streaming = null;
         if (entry.session != null) entry.session.close();
         entry.session = null;
@@ -321,7 +321,7 @@ final class DesktopWallController {
         for (Entry other : entries.values()) {
             if (other == entry) continue;
             other.tileState(WallTile.STATE_IDLE, "");
-            if (other.tile != null) other.tile.showLive(false);
+            if (other.tile != null) { other.tile.showLive(false); other.tile.clearCursor(); }
         }
         entry.lastKeyframe = 0;
         rebindStream();
@@ -345,7 +345,15 @@ final class DesktopWallController {
         if (mirror == null) mirror = MirrorTexture.create();
         entry.mirror = mirror;
         PreviewSession session = new PreviewSession(server, port, entry.id, entry.password, entry.rememberedDisplay,
-                (state, detail) -> onPreviewState(entry, state, detail));
+                new PreviewSession.Tile() {
+                    @Override public void previewState(int state, String detail) { onPreviewState(entry, state, detail); }
+                    @Override public void previewCursor(boolean visible, int shape, boolean positionUpdate,
+                                                        boolean positionValid, float x, float y,
+                                                        float offsetX, float offsetY, int display, long sequence) {
+                        if (entry.tile != null && entry == streaming)
+                            entry.tile.previewCursor(visible, shape, positionUpdate, positionValid, x, y, offsetX, offsetY, sequence);
+                    }
+                });
         session.onFrame = () -> onFrame(entry);
         entry.session = session;
         entry.state = WallTile.STATE_CONNECTING;
