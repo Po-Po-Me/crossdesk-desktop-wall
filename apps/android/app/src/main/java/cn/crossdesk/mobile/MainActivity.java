@@ -67,6 +67,13 @@ public final class MainActivity extends Activity implements NativeSession.Listen
     private int pendingControlDisplay;
     /** Preview-only control screen: the picture streams, the peer sends no input. */
     private boolean viewOnlySession;
+    /**
+     * The host only accepts video_settings once its transport is ready; the first request after
+     * connect often lands too early and is rejected. That left the encoder at its conservative
+     * start (~2 Mbps) until the user touched 画面设置. Retry until the host confirms.
+     */
+    private int videoProfileAttempts;
+    private Runnable videoProfileRetry;
     private RemotePreviewStore.Capture previewCapture;
     private boolean previewCopying,updatingPreviewSwitch;
     private int previewAttempts;
@@ -704,10 +711,10 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         if(video!=null)video.setViewOnly(value);
         if(controls!=null)controls.setViewOnly(value);
         session.setInputBlocked(value);
-        // Return the stream to the encoder's own cadence: video settings, never a preview
-        // subscription, otherwise the host keeps a fixed preview frame gate afterwards.
-        session.restoreInteractiveCadence(videoSettings.selection.quality,
-                videoSettings.selection.frameRate,videoSettings.selection.preference);
+        // Back to the encoder's own cadence through video settings (never a preview
+        // subscription, which leaves a fixed frame gate); retry until the host confirms so the
+        // bitrate climbs back to the high-quality profile.
+        applyVideoProfile();
         if(controls!=null)controls.setZoomFactor(value?video.zoomScale():1f);
         toast(L10n.tr(value?"仅预览：不会发送任何操作，双指缩放或双击放大，轻触菜单可开始控制":"已开始控制"));
     }
@@ -1036,11 +1043,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         if(session==null||ready)return;ready=true;if(progressDialog!=null){progressDialog.dismiss();progressDialog=null;}
         try{history.save(serverKey(),connectedRemote,connectedRemote,hostPlatform,rememberPassword,pendingPassword);}catch(Exception error){toast(L10n.tr("密码保存失败，本次连接仍可使用"));}pendingPassword="";sessionScreen(preferences.getBoolean("autoLandscape",false));
         if(!canUsePictureInPicture())prepareBackgroundSession(true);
-        if(videoSettings.supported){
-            // Always re-assert the chosen profile once per session: hosts start conservative.
-            if(videoSettings.requestId==0)updateVideoSettings(videoSettings.selection);
-            else session.requestInteractiveVideo(videoSettings.selection.quality,videoSettings.selection.preference);
-        }
+        if(videoSettings.supported)applyVideoProfile();
         if(foreground&&preferences.getBoolean("networkConsent",false))remoteVersionCheck.connected();
     }
     @Override public void ended(String reason){
@@ -1102,11 +1105,34 @@ public final class MainActivity extends Activity implements NativeSession.Listen
                 Math.max(0,Math.min(2,quality)),frameRate==30?30:60,
                 Math.max(0,Math.min(2,preferences.getInt("videoPreference",1))));
     }
-    private void updateVideoSettings(RemoteVideoSettings.Values value){
-        if(!ready||session==null||!preferences.getBoolean("networkConsent",false))return;
-        long request=videoSettings.begin(value);if(request<0)return;
+    private boolean updateVideoSettings(RemoteVideoSettings.Values value){
+        if(!ready||session==null||!preferences.getBoolean("networkConsent",false))return false;
+        long request=videoSettings.begin(value);if(request<0)return false;
         cancelVideoSettingsTimeout();if(controls!=null)controls.videoSettings(videoSettings);session.videoSettings(value,request);
-        videoSettingsTimeout=()->{videoSettings.expire(request);if(controls!=null)controls.videoSettings(videoSettings);};mainHandler.postDelayed(videoSettingsTimeout,5000);
+        videoSettingsTimeout=()->{videoSettings.expire(request);if(controls!=null)controls.videoSettings(videoSettings);retryVideoProfile();};mainHandler.postDelayed(videoSettingsTimeout,5000);
+        return true;
+    }
+    /**
+     * Send the chosen quality/frame-rate profile and keep re-sending until the host confirms.
+     * A single lost request is what pinned the stream at the host's low default bitrate while
+     * the UI already claimed 高画质 / 60 fps.
+     */
+    private void applyVideoProfile(){
+        if(!ready||session==null||!videoSettings.supported)return;
+        cancelVideoProfileRetry();
+        videoProfileAttempts=0;
+        updateVideoSettings(videoSettings.selection);
+    }
+    private void retryVideoProfile(){
+        if(!ready||session==null||!videoSettings.supported)return;
+        if(videoProfileAttempts>=4)return;
+        videoProfileAttempts++;
+        cancelVideoProfileRetry();
+        videoProfileRetry=()->{if(ready&&session!=null&&videoSettings.supported)updateVideoSettings(videoSettings.selection);};
+        mainHandler.postDelayed(videoProfileRetry,1200L*videoProfileAttempts);
+    }
+    private void cancelVideoProfileRetry(){
+        if(videoProfileRetry!=null){mainHandler.removeCallbacks(videoProfileRetry);videoProfileRetry=null;}
     }
     @Override public void data(JSONObject message){
         if(session==null)return;
@@ -1120,8 +1146,12 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         if(message.optInt("type",-1)==5){JSONObject service=message.optJSONObject("service_status");remoteServiceAvailable=service!=null&&service.optBoolean("available",false);return;}
         if(message.optInt("type",-1)==12){
             if(!ready)return;
+            boolean wasPending=videoSettings.pending;
             videoSettings.receive(message);
             if(!videoSettings.pending)cancelVideoSettingsTimeout();
+            if(wasPending&&!videoSettings.pending&&!videoSettings.failed){
+                videoProfileAttempts=0;cancelVideoProfileRetry();
+            }
             if(controls!=null)controls.videoSettings(videoSettings);
             RemoteVideoSettings.Values applied=videoSettings.applied;
             preferences.edit().putInt("videoQuality",applied.quality)
@@ -1129,6 +1159,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             // A rejected request means the host could not honour the profile; keep the UI
             // honest by falling back to the value it actually applied.
             if(videoSettings.failed&&controls!=null)controls.videoSettings(videoSettings);
+            if(videoSettings.failed)retryVideoProfile();
             return;
         }
         JSONObject info=message.optJSONObject("host_info");
@@ -1138,7 +1169,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             boolean wasSupported=videoSettings.supported;videoSettings.setSupported(info.optBoolean("supports_video_settings",false));
             if(!videoSettings.supported)cancelVideoSettingsTimeout();
             if(controls!=null)controls.videoSettings(videoSettings);
-            if(videoSettings.supported&&!wasSupported)updateVideoSettings(videoSettings.selection);
+            if(videoSettings.supported&&!wasSupported)applyVideoProfile();
             if(foreground&&preferences.getBoolean("networkConsent",false))remoteVersionCheck.hostInfo(info);
         }
     }
